@@ -563,30 +563,6 @@
     const featured = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
 
     return React.createElement('main', null,
-      discountRule && discountRule.enabled ? React.createElement('div', {
-        style: {
-          background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
-          color: '#000',
-          padding: '16px 24px',
-          margin: '20px auto 0 auto',
-          maxWidth: '1200px',
-          borderRadius: 'var(--radius-sm)',
-          textAlign: 'center',
-          boxShadow: '0 8px 25px rgba(217, 83, 79, 0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '12px'
-        }
-      },
-        React.createElement('span', { style: { fontSize: '1.5rem' } }, '🎁'),
-        React.createElement('div', null,
-          React.createElement('div', { style: { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'uppercase' } }, discountRule.label || 'Special Promotion Active!'),
-          React.createElement('div', { style: { fontSize: '0.9rem', opacity: 0.9 } },
-            `Enjoy ${discountRule.value}${discountRule.type === 'percentage' ? '%' : ' Rs.'} OFF on ${discountRule.targetType === 'all' ? 'all items' : discountRule.targetType === 'category' ? `all ${discountRule.targetCategory}` : 'selected items'}!`
-          )
-        )
-      ) : null,
       React.createElement('section', { className: 'hero-section' },
         React.createElement('div', { className: 'hero-container' },
           React.createElement('div', { className: 'hero-content' },
@@ -2221,26 +2197,28 @@ function DealCardComponent({ deal, addToCart, discountRule }) {
 
   return React.createElement('div', { className: 'deal-card', id: `deal-${deal.id}` },
     deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
-    React.createElement('div', { className: 'deal-card-image-box', style: { height: '190px', position: 'relative', overflow: 'hidden' } },
+    React.createElement('div', { className: 'deal-card-image-box' },
       React.createElement('img', {
         src: deal.image || '/assets/hero_food_collage.png',
         alt: deal.name,
         loading: 'lazy',
         decoding: 'async',
-        style: { width: '100%', height: '100%', objectFit: 'cover' },
         onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
       }),
-      React.createElement('div', { className: 'deal-flyer-glow-ribbon', style: { position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)' } })
+      React.createElement('div', { className: 'deal-flyer-glow-ribbon' })
     ),
-    React.createElement('div', { className: 'deal-card-body', style: { padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' } },
+    React.createElement('div', { className: 'deal-card-body' },
       React.createElement('h3', { className: 'deal-card-title' }, deal.name),
-      React.createElement('p', { className: 'deal-card-contents', style: { color: 'var(--text-muted)', fontSize: '0.9rem' } }, deal.contents),
-      React.createElement('div', { className: 'deal-card-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
-        discountAmount > 0 ? React.createElement('div', null,
-          React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginRight: '6px' } }, `Rs. ${rawPrice}`),
-          React.createElement('span', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: '#4ade80' } }, `Rs. ${finalPrice}`)
-        ) : React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${rawPrice}`),
-        React.createElement('button', { className: 'btn btn-primary', onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: finalPrice }) }, 'Add to Basket +')
+      React.createElement('p', { className: 'deal-card-contents' }, deal.description || deal.contents || ''),
+      React.createElement('div', { className: 'deal-card-footer' },
+        discountAmount > 0 ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+          React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem' } }, `Rs. ${rawPrice}`),
+          React.createElement('span', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: '#4ade80' } }, `Rs. ${finalPrice.toLocaleString()}`)
+        ) : React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${rawPrice.toLocaleString()}`),
+        React.createElement('button', {
+          className: 'btn btn-primary',
+          onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: finalPrice })
+        }, 'Add to Basket +')
       )
     )
   );
