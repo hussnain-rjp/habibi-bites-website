@@ -1,0 +1,1795 @@
+// Habibi Bites Complete Enterprise React Application (Custom Image Upload Edition)
+(function () {
+  if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') return;
+
+  const { useState, useEffect } = React;
+
+  // --- THERMAL INVOICE GENERATOR WITH BRAND LOGO ---
+  function generateThermalInvoiceHTML(order) {
+    const dateFormatted = new Date(order.createdAt || Date.now()).toLocaleString("en-PK", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
+
+    const itemsHTML = (order.items || []).map(item => `
+      <tr>
+        <td style="padding: 4px 0; font-weight: bold; width: 55%;">${item.name} ${item.options?.size ? `(${item.options.size.toUpperCase()})` : ''}</td>
+        <td style="text-align: center; width: 15%;">${item.quantity}</td>
+        <td style="text-align: right; width: 30%;">Rs. ${(item.price * item.quantity).toLocaleString()}</td>
+      </tr>
+      ${item.options?.crust ? `<tr><td colspan="3" style="font-size: 10px; color: #555; padding-left: 8px;">+ Crust: ${item.options.crust.name}</td></tr>` : ''}
+      ${item.options?.addons?.length ? `
+        <tr>
+          <td colspan="3" style="font-size: 10px; color: #555; padding-bottom: 4px; padding-left: 8px;">
+            + Addons: ${item.options.addons.map(a => a.name).join(", ")}
+          </td>
+        </tr>
+      ` : ''}
+    `).join("");
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Receipt ${order.id}</title>
+        <style>
+          body { font-family: monospace; width: 280px; margin: 0 auto; padding: 12px; color: #000; background: #fff; font-size: 12px; }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .divider { border-bottom: 1px dashed #000; margin: 8px 0; }
+          table { width: 100%; border-collapse: collapse; }
+          .logo-img { width: 68px; height: 68px; object-fit: contain; border-radius: 50%; display: block; margin: 0 auto 6px auto; border: 2px solid #000; }
+        </style>
+      </head>
+      <body>
+        <img src="assets/logo.png" alt="Logo" class="logo-img" />
+        <div class="center bold" style="font-size: 16px;">HABIBI BITES</div>
+        <div class="center">Fast Food & Traditional Kitchen</div>
+        <div class="center">Qila Didar Singh, Gujranwala</div>
+        <div class="center">Ph: 0300-1234567</div>
+        <div class="divider"></div>
+        <div><span class="bold">Order ID:</span> ${order.id}</div>
+        <div><span class="bold">Date:</span> ${dateFormatted}</div>
+        <div><span class="bold">Payment:</span> ${order.payment || "Cash on Delivery"}</div>
+        <div class="divider"></div>
+        <div><span class="bold">Customer:</span> ${order.customer?.name || "Guest"}</div>
+        <div><span class="bold">Phone:</span> ${order.customer?.phone || "N/A"}</div>
+        <div><span class="bold">Address:</span> ${order.customer?.address || "Takeaway"}</div>
+        <div class="divider"></div>
+        <table>
+          <thead>
+            <tr style="border-bottom: 1px solid #000;">
+              <th style="text-align: left;">Item</th>
+              <th style="text-align: center;">Qty</th>
+              <th style="text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHTML}
+          </tbody>
+        </table>
+        <div class="divider"></div>
+        <table>
+          <tr><td>Subtotal:</td><td style="text-align: right;">Rs. ${((order.total || 0) - (order.deliveryFee || 0)).toLocaleString()}</td></tr>
+          <tr><td>Delivery Fee:</td><td style="text-align: right;">${(order.deliveryFee || 0) > 0 ? `Rs. ${order.deliveryFee}` : 'FREE'}</td></tr>
+          <tr style="font-weight: bold; font-size: 14px;">
+            <td>NET TOTAL:</td>
+            <td style="text-align: right;">Rs. ${(order.total || 0).toLocaleString()}</td>
+          </tr>
+        </table>
+        <div class="divider"></div>
+        <div class="center bold">Thank You For Choosing Habibi Bites!</div>
+        <div class="center" style="font-size: 10px;">Hot & Fresh Food Delivered</div>
+      </body>
+      </html>
+    `;
+  }
+
+  // --- REPOSITORY LAYER ---
+  const DB_KEYS = {
+    ORDERS: "habibi_bites_orders",
+    REVIEWS: "habibi_bites_reviews",
+    ADMIN: "habibi_bites_admin_session",
+    LAST_ORDER_ID: "habibi_bites_last_id",
+    MENU_ITEMS: "habibi_bites_menu_items",
+    DEALS: "habibi_bites_deals",
+    SETTINGS: "habibi_bites_delivery_settings",
+    ADMIN_CREDS: "habibi_bites_admin_credentials",
+    RESTAURANT_INFO: "habibi_bites_restaurant_info"
+  };
+
+  const DEFAULT_REVIEWS = [
+    { id: 1, name: "Hamza Malik", rating: 5, comment: "Best Zinger burger in Gujranwala! The crunch is out of this world.", date: "2026-08-04", approved: true },
+    { id: 2, name: "Ayesha Bibi", rating: 4, comment: "Tikka Pizza was loaded with toppings and steaming hot when delivered. Very impressed!", date: "2026-08-04", approved: true },
+    { id: 3, name: "Zainab Chaudhry", rating: 5, comment: "The Creamy Habibi Special Pasta has the best cheese pull in the city. A must try!", date: "2026-08-03", approved: true },
+    { id: 4, name: "Usman Ghani", rating: 5, comment: "Special Deal 7 is super value. The large pizza, burgers and fries easily fed my family.", date: "2026-08-02", approved: true }
+  ];
+
+  function readStore(key) {
+    try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : null; } catch (e) { return null; }
+  }
+  function writeStore(key, data) {
+    try { localStorage.setItem(key, JSON.stringify(data)); window.dispatchEvent(new Event("storage_changed")); } catch (e) {}
+  }
+
+  class FullBrowserRepository {
+    constructor() {
+      if (!readStore(DB_KEYS.REVIEWS)) writeStore(DB_KEYS.REVIEWS, DEFAULT_REVIEWS);
+      if (!readStore(DB_KEYS.LAST_ORDER_ID)) writeStore(DB_KEYS.LAST_ORDER_ID, 5103);
+      if (!readStore(DB_KEYS.SETTINGS)) writeStore(DB_KEYS.SETTINGS, { enabled: false, fee: 150, maxOrders: 50 });
+      if (!readStore(DB_KEYS.MENU_ITEMS) && window.HABIBI_MENU) writeStore(DB_KEYS.MENU_ITEMS, window.HABIBI_MENU.items || []);
+      if (!readStore(DB_KEYS.DEALS) && window.HABIBI_DEALS) writeStore(DB_KEYS.DEALS, window.HABIBI_DEALS || []);
+    }
+    async getMenuItems() { return readStore(DB_KEYS.MENU_ITEMS) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []); }
+    async saveMenuItem(item) {
+      const items = await this.getMenuItems();
+      const idx = items.findIndex(i => String(i.id) === String(item.id));
+      if (idx !== -1) items[idx] = item; else items.push(item);
+      writeStore(DB_KEYS.MENU_ITEMS, items);
+      return item;
+    }
+    async deleteMenuItem(id) {
+      const items = (await this.getMenuItems()).filter(i => String(i.id) !== String(id));
+      writeStore(DB_KEYS.MENU_ITEMS, items);
+    }
+    async getDeals() { return readStore(DB_KEYS.DEALS) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []); }
+    async getOrders() { return readStore(DB_KEYS.ORDERS) || []; }
+    async getOrderById(id) { return (await this.getOrders()).find(o => o.id.toUpperCase() === id.toUpperCase().trim()) || null; }
+    async getOrdersByPhone(phone) { const clean = phone.replace(/[^0-9]/g, ""); return (await this.getOrders()).filter(o => o.customer?.phone?.replace(/[^0-9]/g, "") === clean); }
+    async createOrder(customer, items, total, deliveryFee = 0) {
+      const settings = await this.getDeliverySettings();
+      const orders = await this.getOrders();
+      const activeCount = orders.filter(o => ["received", "queue", "cooking", "packing", "delivery"].includes(o.status)).length;
+      if (activeCount >= settings.maxOrders) {
+        throw new Error("Kitchen is at full capacity right now. Please try again shortly.");
+      }
+      let lastId = parseInt(readStore(DB_KEYS.LAST_ORDER_ID)) || 5103;
+      lastId += 1;
+      writeStore(DB_KEYS.LAST_ORDER_ID, lastId);
+      const newOrder = {
+        id: `HB-${lastId}`,
+        customer,
+        items,
+        total: parseFloat(total),
+        deliveryFee: parseFloat(deliveryFee),
+        status: "received",
+        createdAt: new Date().toISOString(),
+        updates: [{ stage: "received", time: new Date().toISOString() }]
+      };
+      orders.unshift(newOrder);
+      writeStore(DB_KEYS.ORDERS, orders);
+      return newOrder;
+    }
+    async updateOrderStatus(orderId, newStatus) {
+      const orders = await this.getOrders();
+      const idx = orders.findIndex(o => o.id.toUpperCase() === orderId.toUpperCase().trim());
+      if (idx !== -1) {
+        orders[idx].status = newStatus;
+        if (!orders[idx].updates) orders[idx].updates = [];
+        if (!orders[idx].updates.some(u => u.stage === newStatus)) {
+          orders[idx].updates.push({ stage: newStatus, time: new Date().toISOString() });
+        }
+        writeStore(DB_KEYS.ORDERS, orders);
+      }
+      return orders[idx];
+    }
+    async getReviews() { return (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => r.approved); }
+    async getPendingReviews() { return (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => !r.approved); }
+    async addReview(name, rating, comment) {
+      const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS;
+      const rev = { id: Date.now(), name, rating: parseInt(rating)||5, comment, date: new Date().toISOString().split('T')[0], approved: false };
+      all.unshift(rev);
+      writeStore(DB_KEYS.REVIEWS, all);
+      return rev;
+    }
+    async approveReview(id) { const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS; const idx = all.findIndex(r => String(r.id) === String(id)); if (idx !== -1) { all[idx].approved = true; writeStore(DB_KEYS.REVIEWS, all); } }
+    async deleteReview(id) { const all = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => String(r.id) !== String(id)); writeStore(DB_KEYS.REVIEWS, all); }
+    async getDeliverySettings() { return readStore(DB_KEYS.SETTINGS) || { enabled: false, fee: 150, maxOrders: 50 }; }
+    async saveDeliverySettings(enabled, fee, maxOrders) { const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 }; writeStore(DB_KEYS.SETTINGS, s); return s; }
+    async getAdminCredentials() {
+      return readStore(DB_KEYS.ADMIN_CREDS) || { username: 'admin', password: 'habibibites123' };
+    }
+    async loginAdmin(u, p) {
+      const creds = await this.getAdminCredentials();
+      if (u === creds.username && p === creds.password) {
+        writeStore(DB_KEYS.ADMIN, { u, time: Date.now() });
+        return true;
+      }
+      return false;
+    }
+    async changeAdminCredentials(newUsername, newPassword) {
+      writeStore(DB_KEYS.ADMIN_CREDS, { username: newUsername, password: newPassword });
+      // Update active session username
+      const session = readStore(DB_KEYS.ADMIN);
+      if (session) writeStore(DB_KEYS.ADMIN, { ...session, u: newUsername });
+    }
+    async getRestaurantInfo() {
+      return readStore(DB_KEYS.RESTAURANT_INFO) || {
+        name: 'Habibi Bites',
+        tagline: 'Fast Food & Traditional Kitchen',
+        address: 'Qila Didar Singh, Gujranwala',
+        phone: '0300-1234567',
+        email: 'habibibites@gmail.com'
+      };
+    }
+    async saveRestaurantInfo(info) {
+      writeStore(DB_KEYS.RESTAURANT_INFO, info);
+    }
+    async logoutAdmin() { localStorage.removeItem(DB_KEYS.ADMIN); }
+    async isAdminLoggedIn() { return !!readStore(DB_KEYS.ADMIN); }
+  }
+
+  const repo = new FullBrowserRepository();
+
+  // --- MAIN APP COMPONENT ---
+  function HabibiBitesFullApp() {
+    const [activePage, setActivePage] = useState('home');
+    const [cart, setCart] = useState(() => {
+      try { const s = localStorage.getItem("habibi_bites_cart"); return s ? JSON.parse(s) : []; } catch(e) { return []; }
+    });
+    const [cartOpen, setCartOpen] = useState(false);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const [customizeItem, setCustomizeItem] = useState(null);
+    const [selectedOrderId, setSelectedOrderId] = useState('');
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    useEffect(() => {
+      localStorage.setItem("habibi_bites_cart", JSON.stringify(cart));
+    }, [cart]);
+
+    useEffect(() => {
+      repo.isAdminLoggedIn().then(setIsAdmin);
+    }, []);
+
+    useEffect(() => {
+      const handleHash = () => {
+        const hash = window.location.hash.replace('#', '');
+        if (hash && ['home', 'menu', 'deals', 'tracker', 'checkout', 'admin', 'reviews', 'contact'].includes(hash)) {
+          setActivePage(hash);
+        }
+      };
+      handleHash();
+      window.addEventListener('hashchange', handleHash);
+      return () => window.removeEventListener('hashchange', handleHash);
+    }, []);
+
+    const addToCart = (item) => {
+      setCart(prev => {
+        const idx = prev.findIndex(i => i.id === item.id && JSON.stringify(i.options) === JSON.stringify(item.options));
+        if (idx !== -1) { const copy = [...prev]; copy[idx].quantity += item.quantity || 1; return copy; }
+        return [...prev, { ...item, quantity: item.quantity || 1 }];
+      });
+      setCartOpen(true);
+    };
+
+    const updateQuantity = (idx, newQty) => {
+      setCart(prev => {
+        if (newQty <= 0) return prev.filter((_, i) => i !== idx);
+        const copy = [...prev]; copy[idx].quantity = newQty; return copy;
+      });
+    };
+
+    const cartCount = cart.reduce((a, i) => a + i.quantity, 0);
+    const cartSubtotal = cart.reduce((a, i) => a + (i.price * i.quantity), 0);
+
+    return React.createElement('div', { style: { minHeight: '100vh', display: 'flex', flexDirection: 'column' } },
+      
+      // Global Navigation Header
+      React.createElement('header', { id: 'global-header' },
+        React.createElement('div', { className: 'nav-container' },
+          React.createElement('button', { onClick: () => setActivePage('home'), className: 'logo-wrapper', style: { background: 'none', border: 'none', cursor: 'pointer', padding: 0 } },
+            React.createElement('img', { src: 'assets/logo.png', alt: 'Habibi Bites Logo', className: 'logo-img', style: { height: '68px', borderRadius: '4px', border: '2px solid var(--primary)', background: '#000', boxShadow: 'var(--shadow-sm)' } })
+          ),
+          React.createElement('nav', { className: `nav-links ${mobileNavOpen ? 'active' : ''}` },
+            [
+              { id: 'home', label: 'Home' },
+              { id: 'menu', label: 'Menu' },
+              { id: 'deals', label: 'Habibi Deals' },
+              { id: 'tracker', label: 'Order Tracker' },
+              { id: 'reviews', label: 'Reviews' },
+              { id: 'contact', label: 'Contact Us' }
+            ].map(link => 
+              React.createElement('a', {
+                key: link.id,
+                href: `#${link.id}`,
+                className: activePage === link.id ? 'active' : '',
+                onClick: (e) => { e.preventDefault(); setActivePage(link.id); setMobileNavOpen(false); }
+              }, link.label)
+            )
+          ),
+          React.createElement('div', { className: 'header-actions' },
+            React.createElement('button', { className: 'cart-trigger', onClick: () => setCartOpen(true) },
+              React.createElement('span', { className: 'cart-trigger-label' }, `Cart (${cartCount})`)
+            ),
+            React.createElement('button', { className: 'admin-profile-trigger', title: 'Admin Portal', onClick: () => setActivePage('admin') },
+              React.createElement('span', null, '🔐')
+            ),
+            React.createElement('button', { className: 'mobile-toggle', onClick: () => setMobileNavOpen(!mobileNavOpen) },
+              React.createElement('span'), React.createElement('span'), React.createElement('span')
+            )
+          )
+        )
+      ),
+
+      // Page Content Router
+      React.createElement('div', { style: { flex: 1 } },
+        activePage === 'home' ? React.createElement(HomePageView, { setActivePage, addToCart }) :
+        activePage === 'menu' ? React.createElement(MenuView, { addToCart, onCustomize: setCustomizeItem }) :
+        activePage === 'deals' ? React.createElement(DealsView, { addToCart }) :
+        activePage === 'checkout' ? React.createElement(CheckoutView, { cart, cartSubtotal, clearCart: () => setCart([]), setActivePage, setSelectedOrderId }) :
+        activePage === 'tracker' ? React.createElement(TrackerView, { selectedOrderId }) :
+        activePage === 'admin' ? React.createElement(AdminView, { isAdmin, setIsAdmin }) :
+        activePage === 'reviews' ? React.createElement(ReviewsView) :
+        activePage === 'contact' ? React.createElement(ContactView) :
+        React.createElement(HomePageView, { setActivePage, addToCart })
+      ),
+
+      // Slide-Out Basket Drawer
+      cartOpen ? React.createElement(CartDrawerModal, { cart, cartSubtotal, updateQuantity, removeFromCart: (idx) => updateQuantity(idx, 0), onClose: () => setCartOpen(false), setActivePage }) : null,
+
+      // Item Customization Modal
+      customizeItem ? React.createElement(CustomizationModalView, { item: customizeItem, onClose: () => setCustomizeItem(null), addToCart }) : null,
+
+      // Global Footer
+      React.createElement(FooterView, { setActivePage })
+    );
+  }
+
+  // --- PAGE VIEW COMPONENTS ---
+
+  function HomePageView({ setActivePage, addToCart }) {
+    const deals = window.HABIBI_DEALS || [];
+    const featured = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
+
+    return React.createElement('main', null,
+      React.createElement('section', { className: 'hero-section' },
+        React.createElement('div', { className: 'hero-container' },
+          React.createElement('div', { className: 'hero-content' },
+            React.createElement('span', { className: 'hero-tag' }, '🔥 Now Delivering in Qila Didar Singh'),
+            React.createElement('h1', { className: 'hero-title' }, 'Delicious Food ', React.createElement('br'), 'Served with ', React.createElement('span', null, 'Passion')),
+            React.createElement('p', { className: 'hero-desc' }, 'Experience the ultimate flavor fusion. From brick-oven pizzas and double-patty beef burgers to clay-pot handis and crispy golden broast, we satisfy every craving.'),
+            React.createElement('div', { className: 'hero-actions' },
+              React.createElement('button', { className: 'btn btn-primary', onClick: () => setActivePage('menu') }, 'Order Online Now ➔'),
+              React.createElement('button', { className: 'btn btn-outline', onClick: () => setActivePage('deals'), style: { marginLeft: '10px' } }, 'Explore Hot Deals ⚡')
+            )
+          ),
+          React.createElement('div', { className: 'hero-image-wrapper' },
+            React.createElement('div', { className: 'hero-image-glow' }),
+            React.createElement('div', { className: 'hero-image-container', style: { position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' } },
+              React.createElement('img', { src: 'assets/logo.png', alt: 'Habibi Bites Logo', style: { width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'contain', borderRadius: '50%', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#fff', padding: '10px' } })
+            )
+          )
+        )
+      ),
+
+      React.createElement('section', { className: 'features-section' },
+        React.createElement('div', { className: 'section-container' },
+          React.createElement('div', { className: 'section-header' },
+            React.createElement('span', { className: 'section-subtitle' }, 'Why Habibi Bites?'),
+            React.createElement('h2', { className: 'section-title' }, 'The Standard of Freshness')
+          ),
+          React.createElement('div', { className: 'features-grid' },
+            React.createElement('div', { className: 'feature-card' },
+              React.createElement('div', { className: 'feature-icon' }, '⚡'),
+              React.createElement('h3', null, 'Lightning Fast Delivery'),
+              React.createElement('p', null, 'Equipped with hot bag carriers, our riders ensure your pizza and burgers arrive fresh, steaming, and ready to devour.')
+            ),
+            React.createElement('div', { className: 'feature-card' },
+              React.createElement('div', { className: 'feature-icon' }, '👨‍🍳'),
+              React.createElement('h3', null, 'Traditional Wok Masters'),
+              React.createElement('p', null, 'Our Pakistani handis and karahis are crafted by experienced local chefs using open charcoal flames.')
+            ),
+            React.createElement('div', { className: 'feature-card' },
+              React.createElement('div', { className: 'feature-icon' }, '🍕'),
+              React.createElement('h3', null, 'Hand-Stretched Crusts'),
+              React.createElement('p', null, 'Our special pizza dough is fermented for 24 hours, hand-stretched, and baked on stone slabs.')
+            )
+          )
+        )
+      ),
+
+      React.createElement('section', { className: 'featured-menu' },
+        React.createElement('div', { className: 'section-container' },
+          React.createElement('div', { className: 'section-header' },
+            React.createElement('span', { className: 'section-subtitle' }, 'Customer Favorites'),
+            React.createElement('h2', { className: 'section-title' }, 'Bestselling Combos')
+          ),
+          React.createElement('div', { className: 'deals-grid' },
+            (featured.length > 0 ? featured : deals.slice(0, 4)).map(deal =>
+              React.createElement(DealCardComponent, { key: deal.id, deal, addToCart })
+            )
+          )
+        )
+      )
+    );
+  }
+
+  function MenuView({ addToCart, onCustomize }) {
+    const [items, setItems] = useState([]);
+    const [activeCat, setActiveCat] = useState('pizza');
+
+    useEffect(() => {
+      repo.getMenuItems().then(setItems);
+    }, []);
+
+    const categories = window.HABIBI_MENU?.categories || [
+      { id: "pizza", name: "Pizzas" },
+      { id: "special_pizza", name: "Special Pizza" },
+      { id: "burgers", name: "Burgers" },
+      { id: "wraps", name: "Wraps & Rolls" },
+      { id: "desi", name: "Desi & Broast" },
+      { id: "starters", name: "Starters & Sides" },
+      { id: "pasta", name: "Pastas" },
+      { id: "drinks", name: "Chil Side & Desserts" }
+    ];
+
+    const scrollToCat = (catId) => {
+      setActiveCat(catId);
+      const el = document.getElementById(`section-${catId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    return React.createElement('main', { className: 'section-container page-top-margin' },
+      React.createElement('div', { className: 'section-header' },
+        React.createElement('span', { className: 'section-subtitle' }, 'Habibi Bites Kitchen'),
+        React.createElement('h1', { className: 'section-title' }, 'Explore Our Online Menu')
+      ),
+      React.createElement('div', { className: 'menu-layout' },
+        React.createElement('aside', { className: 'menu-sidebar-nav' },
+          categories.map(cat =>
+            React.createElement('button', {
+              key: cat.id,
+              className: `menu-nav-btn ${activeCat === cat.id ? 'active' : ''}`,
+              onClick: () => scrollToCat(cat.id)
+            }, cat.name)
+          )
+        ),
+        React.createElement('section', { className: 'menu-sections-wrapper' },
+          categories.map(cat => {
+            const catItems = items.filter(i => i.category === cat.id);
+            return React.createElement('div', { className: 'menu-section', id: `section-${cat.id}`, key: cat.id },
+              React.createElement('div', { className: 'menu-section-header-row' },
+                React.createElement('h2', { className: 'menu-section-title' }, cat.name),
+                React.createElement('span', { className: 'badge badge-accent' }, `${catItems.length} Items`)
+              ),
+              React.createElement('div', { className: 'menu-items-list' },
+                catItems.map(item => React.createElement(FoodCardComponent, { key: item.id, item, addToCart, onCustomize }))
+              )
+            );
+          })
+        )
+      )
+    );
+  }
+
+  function DealsView({ addToCart }) {
+    const [deals, setDeals] = useState([]);
+    useEffect(() => { repo.getDeals().then(setDeals); }, []);
+
+    return React.createElement('main', { className: 'section-container page-top-margin' },
+      React.createElement('div', { className: 'section-header' },
+        React.createElement('span', { className: 'section-subtitle' }, 'Super Saver Combos'),
+        React.createElement('h1', { className: 'section-title' }, 'Habibi Exclusive Deals')
+      ),
+      React.createElement('div', { className: 'deals-grid' },
+        deals.map(deal => React.createElement(DealCardComponent, { key: deal.id, deal, addToCart }))
+      )
+    );
+  }
+
+  function CheckoutView({ cart, cartSubtotal, clearCart, setActivePage, setSelectedOrderId }) {
+    const [name, setName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [address, setAddress] = useState('');
+    const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150 });
+    const [loading, setLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
+    const [createdOrder, setCreatedOrder] = useState(null);
+
+    useEffect(() => {
+      repo.getDeliverySettings().then(setDeliverySettings);
+    }, []);
+
+    const deliveryFee = deliverySettings.enabled ? deliverySettings.fee : 0;
+    const grandTotal = cartSubtotal + deliveryFee;
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      if (!name || !phone || !address) { setErrorMsg("Please fill in all fields."); return; }
+      setLoading(true);
+      try {
+        const order = await repo.createOrder({ name, phone, address }, cart, grandTotal, deliveryFee);
+        setCreatedOrder(order);
+        clearCart();
+        if (setSelectedOrderId) setSelectedOrderId(order.id);
+      } catch(err) {
+        setErrorMsg(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handlePrintReceipt = (order) => {
+      const html = generateThermalInvoiceHTML(order);
+      const win = window.open('', '_blank', 'width=350,height=600');
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 250);
+    };
+
+    const handleDownloadReceipt = (order) => {
+      const html = generateThermalInvoiceHTML(order);
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Receipt_${order.id}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    if (createdOrder) {
+      return React.createElement('main', { className: 'section-container page-top-margin' },
+        React.createElement('div', { className: 'modal-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px' } },
+          React.createElement('div', { style: { maxWidth: '480px', width: '100%', background: 'var(--bg-dark)', borderRadius: '12px', border: '2px solid var(--accent)', padding: '30px', textAlign: 'center', boxShadow: '0 0 30px rgba(217, 164, 65, 0.4)' } },
+            React.createElement('div', { style: { fontSize: '4rem', marginBottom: '10px' } }, '🎉'),
+            React.createElement('h2', { style: { color: 'var(--accent)', margin: '0 0 10px 0', fontSize: '1.8rem' } }, 'Order Placed Successfully!'),
+            React.createElement('p', { style: { color: 'var(--text-muted)', marginBottom: '15px' } }, `Your Order ID is `, React.createElement('strong', { style: { color: 'var(--primary)', fontSize: '1.2rem' } }, createdOrder.id)),
+            React.createElement('p', { style: { fontSize: '0.9rem', marginBottom: '25px', color: 'var(--text-main)' } }, `Thank you ${createdOrder.customer?.name}! Your hot & fresh meal is being prepared by our chefs.`),
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+              React.createElement('button', { className: 'btn btn-primary', onClick: () => handlePrintReceipt(createdOrder), style: { justifyContent: 'center', padding: '12px' } }, '👁️ View & Print Receipt'),
+              React.createElement('button', { className: 'btn btn-outline', onClick: () => handleDownloadReceipt(createdOrder), style: { justifyContent: 'center', padding: '12px', borderColor: 'var(--accent)', color: 'var(--accent)' } }, '⬇️ Download Receipt File'),
+              React.createElement('button', { className: 'btn btn-primary', onClick: () => { setCreatedOrder(null); setActivePage('tracker'); }, style: { justifyContent: 'center', padding: '12px', background: 'var(--accent)', color: '#000' } }, '🚀 Track Order Live ➔')
+            )
+          )
+        )
+      );
+    }
+
+    return React.createElement('main', { className: 'section-container page-top-margin' },
+      React.createElement('div', { className: 'section-header' },
+        React.createElement('h1', { className: 'section-title' }, 'Complete Your Order')
+      ),
+      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '30px', marginTop: '20px' } },
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginBottom: '15px' } }, 'Buyer Details'),
+          errorMsg ? React.createElement('div', { style: { padding: '10px', background: 'rgba(217,83,79,0.2)', color: '#ff6b6b', marginBottom: '15px', borderRadius: '4px' } }, errorMsg) : null,
+          React.createElement('form', { onSubmit: handleSubmit },
+            React.createElement('div', { style: { marginBottom: '12px' } },
+              React.createElement('label', { style: { display: 'block', marginBottom: '4px' } }, 'Full Name *'),
+              React.createElement('input', { required: true, value: name, onChange: e => setName(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '12px' } },
+              React.createElement('label', { style: { display: 'block', marginBottom: '4px' } }, 'Phone Number *'),
+              React.createElement('input', { required: true, value: phone, onChange: e => setPhone(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '20px' } },
+              React.createElement('label', { style: { display: 'block', marginBottom: '4px' } }, 'Delivery Address *'),
+              React.createElement('textarea', { required: true, rows: 3, value: address, onChange: e => setAddress(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', padding: '14px', justifyContent: 'center' }, disabled: loading || cart.length === 0 },
+              loading ? 'Processing...' : 'Confirm & Place Order ➔'
+            )
+          )
+        ),
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginBottom: '15px' } }, 'Order Summary'),
+          cart.map((item, i) => React.createElement('div', { key: i, style: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px dashed var(--border-light)' } },
+            React.createElement('span', null, `${item.quantity}x ${item.name}`),
+            React.createElement('span', { style: { fontWeight: 'bold' } }, `Rs. ${item.price * item.quantity}`)
+          )),
+          React.createElement('div', { style: { borderTop: '1px solid var(--border)', paddingTop: '15px', marginTop: '15px' } },
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '6px' } },
+              React.createElement('span', null, 'Subtotal:'),
+              React.createElement('span', null, `Rs. ${cartSubtotal.toLocaleString()}`)
+            ),
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px' } },
+              React.createElement('span', null, 'Delivery Charges:'),
+              React.createElement('span', { style: { color: deliveryFee > 0 ? 'var(--accent)' : '#4caf50', fontWeight: 'bold' } }, deliveryFee > 0 ? `Rs. ${deliveryFee}` : 'FREE')
+            ),
+            React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', borderTop: '1px dashed var(--border-light)', paddingTop: '10px', color: 'var(--primary)', display: 'flex', justifyContent: 'space-between' } },
+              React.createElement('span', null, 'Grand Total:'),
+              React.createElement('span', null, `Rs. ${grandTotal.toLocaleString()}`)
+            )
+          )
+        )
+      )
+    );
+  }
+
+  function TrackerView({ selectedOrderId }) {
+    const [input, setInput] = useState(selectedOrderId || '');
+    const [order, setOrder] = useState(null);
+    const [error, setError] = useState('');
+
+    const stages = [
+      { key: "received", label: "Received", icon: "📝" },
+      { key: "queue", label: "Kitchen Queue", icon: "⏳" },
+      { key: "cooking", label: "Cooking Hot", icon: "🔥" },
+      { key: "packing", label: "Packing Feast", icon: "📦" },
+      { key: "delivery", label: "Out for Delivery", icon: "🛵" },
+      { key: "delivered", label: "Delivered", icon: "✅" }
+    ];
+
+    const handleSearch = async (e) => {
+      if (e) e.preventDefault();
+      if (!input.trim()) return;
+      setError(''); setOrder(null);
+      if (input.toUpperCase().startsWith("HB-")) {
+        const o = await repo.getOrderById(input);
+        if (o) setOrder(o); else setError(`No order found matching "${input}".`);
+      } else {
+        const list = await repo.getOrdersByPhone(input);
+        if (list.length > 0) setOrder(list[0]); else setError(`No order found for phone "${input}".`);
+      }
+    };
+
+    return React.createElement('main', { className: 'section-container page-top-margin tracker-section' },
+      React.createElement('div', { className: 'section-header' },
+        React.createElement('span', { className: 'section-subtitle' }, 'Real-Time Pipeline'),
+        React.createElement('h1', { className: 'section-title' }, 'Track Your Live Order')
+      ),
+      React.createElement('div', { style: { maxWidth: '500px', margin: '0 auto 30px auto' } },
+        React.createElement('form', { onSubmit: handleSearch, style: { display: 'flex', gap: '10px' } },
+          React.createElement('input', { value: input, onChange: e => setInput(e.target.value), placeholder: 'Enter HB-5103 or Phone', style: { flex: 1, padding: '12px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
+          React.createElement('button', { type: 'submit', className: 'btn btn-primary' }, 'Search 🔍')
+        )
+      ),
+      error ? React.createElement('div', { style: { textAlign: 'center', color: '#ff6b6b' } }, error) : null,
+      order ? React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '30px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' } },
+        React.createElement('h2', { style: { color: 'var(--accent)', margin: 0 } }, `Order #${order.id}`),
+        React.createElement('div', { style: { margin: '30px 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: '10px', textAlign: 'center' } },
+          stages.map((s, idx) => {
+            const currentIdx = stages.findIndex(st => st.key === order.status);
+            const isPassed = currentIdx >= idx;
+            return React.createElement('div', { key: s.key, style: { opacity: isPassed ? 1 : 0.4 } },
+              React.createElement('div', { style: { width: '44px', height: '44px', borderRadius: '50%', margin: '0 auto 8px auto', background: isPassed ? 'var(--primary)' : 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' } }, s.icon),
+              React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 'bold' } }, s.label)
+            );
+          })
+        )
+      ) : null
+    );
+  }
+
+  // --- ADMIN DASHBOARD WITH CUSTOM IMAGE UPLOAD SUPPORT FROM PC ---
+  function AdminView({ isAdmin, setIsAdmin }) {
+    const [u, setU] = useState('admin');
+    const [p, setP] = useState('');
+    const [adminTab, setAdminTab] = useState('orders');
+    const [orders, setOrders] = useState([]);
+    const [pendingReviews, setPendingReviews] = useState([]);
+    const [menuItems, setMenuItems] = useState([]);
+    const [selectedCategory, setSelectedCategory] = useState('pizza');
+    
+    // Menu Editor State (Add & Edit Existing)
+    const [editingItem, setEditingItem] = useState(null);
+    const [itemId, setItemId] = useState('');
+    const [itemName, setItemName] = useState('');
+    const [itemDesc, setItemDesc] = useState('');
+    const [itemCat, setItemCat] = useState('pizza');
+    const [itemPrice, setItemPrice] = useState(550);
+    const [itemImg, setItemImg] = useState('assets/hero_food_collage.png');
+    
+    // Pizza Size Prices State
+    const [priceSmall, setPriceSmall] = useState(550);
+    const [priceRegular, setPriceRegular] = useState(1150);
+    const [priceLarge, setPriceLarge] = useState(1600);
+    const [priceXlarge, setPriceXlarge] = useState(2250);
+
+    // Delivery Settings
+    const [feeInput, setFeeInput] = useState(150);
+    const [maxInput, setMaxInput] = useState(50);
+    const [enabledInput, setEnabledInput] = useState(false);
+
+    // Admin Account Settings State
+    const [settingsMsg, setSettingsMsg] = useState({ type: '', text: '' });
+    const [currentPassInput, setCurrentPassInput] = useState('');
+    const [newUsernameInput, setNewUsernameInput] = useState('');
+    const [newPassInput, setNewPassInput] = useState('');
+    const [confirmPassInput, setConfirmPassInput] = useState('');
+    // Restaurant Branding State
+    const [restName, setRestName] = useState('Habibi Bites');
+    const [restTagline, setRestTagline] = useState('Fast Food & Traditional Kitchen');
+    const [restAddress, setRestAddress] = useState('Qila Didar Singh, Gujranwala');
+    const [restPhone, setRestPhone] = useState('0300-1234567');
+    const [restEmail, setRestEmail] = useState('habibibites@gmail.com');
+    // Danger Zone Confirmation Modal State
+    const [dangerModalStep, setDangerModalStep] = useState(0); // 0=closed 1=step1 2=step2
+    const [dangerConfirmText, setDangerConfirmText] = useState('');
+
+    const assetOptions = [
+      { label: "Chicken Tikka Pizza", path: "assets/pizza_tikka_real.png" },
+      { label: "Zinger Burger", path: "assets/burger_zinger.png" },
+      { label: "Double Decker Zinger", path: "assets/burger_double_zinger.png" },
+      { label: "Smokey Beef Burger", path: "assets/burger_beef.png" },
+      { label: "Shawarma Wrap", path: "assets/wrap_shawarma.png" },
+      { label: "Paratha Roll", path: "assets/wrap_paratha.png" },
+      { label: "Crispy Broast", path: "assets/desi_broast.png" },
+      { label: "Chicken Karahi", path: "assets/desi_karahi.png" },
+      { label: "Seekh Kabab Handi", path: "assets/desi_kabab.png" },
+      { label: "Club Fries", path: "assets/starters_fries.png" },
+      { label: "BBQ Wings", path: "assets/starters_wings.png" },
+      { label: "Alfredo Pasta", path: "assets/pasta_alfredo.png" },
+      { label: "Hero Food Collage", path: "assets/hero_food_collage.png" }
+    ];
+
+    useEffect(() => {
+      if (isAdmin) loadDashboard();
+    }, [isAdmin]);
+
+    const loadDashboard = async () => {
+      setOrders(await repo.getOrders());
+      setPendingReviews(await repo.getPendingReviews());
+      setMenuItems(await repo.getMenuItems());
+      const s = await repo.getDeliverySettings();
+      setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
+      // Load restaurant info
+      const info = await repo.getRestaurantInfo();
+      setRestName(info.name || 'Habibi Bites');
+      setRestTagline(info.tagline || 'Fast Food & Traditional Kitchen');
+      setRestAddress(info.address || 'Qila Didar Singh, Gujranwala');
+      setRestPhone(info.phone || '0300-1234567');
+      setRestEmail(info.email || 'habibibites@gmail.com');
+      // Pre-fill username field
+      const creds = await repo.getAdminCredentials();
+      setNewUsernameInput(creds.username || 'admin');
+    };
+
+    const handleFileUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setItemImg(reader.result); // Base64 Data URL
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+
+    const handlePrintInvoice = (order) => {
+      const html = generateThermalInvoiceHTML(order);
+      const win = window.open('', '_blank', 'width=350,height=600');
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 250);
+    };
+
+    const handleStartEdit = (item) => {
+      setEditingItem(item);
+      setItemId(item.id);
+      setItemName(item.name || '');
+      setItemDesc(item.description || '');
+      setItemCat(item.category || 'pizza');
+      setItemImg(item.image || 'assets/hero_food_collage.png');
+      
+      if (item.prices) {
+        setItemPrice(item.prices.default || Object.values(item.prices)[0] || 550);
+        setPriceSmall(item.prices.small || 550);
+        setPriceRegular(item.prices.regular || 1150);
+        setPriceLarge(item.prices.large || 1600);
+        setPriceXlarge(item.prices.xlarge || 2250);
+      } else {
+        setItemPrice(550);
+      }
+    };
+
+    const handleCancelEdit = () => {
+      setEditingItem(null);
+      setItemId('');
+      setItemName('');
+      setItemDesc('');
+      setItemPrice(550);
+      setItemImg('assets/hero_food_collage.png');
+    };
+
+    const handleSaveMenuItem = async (e) => {
+      e.preventDefault();
+      if (!itemName) return;
+
+      let pricesObj = {};
+      if (itemCat === 'pizza' || itemCat === 'special_pizza') {
+        pricesObj = {
+          small: parseFloat(priceSmall) || 550,
+          regular: parseFloat(priceRegular) || 1150,
+          large: parseFloat(priceLarge) || 1600,
+          xlarge: parseFloat(priceXlarge) || 2250
+        };
+      } else {
+        pricesObj = { default: parseFloat(itemPrice) || 550 };
+      }
+
+      const itemToSave = {
+        id: editingItem ? editingItem.id : `custom_${Date.now()}`,
+        name: itemName,
+        category: itemCat,
+        description: itemDesc,
+        prices: pricesObj,
+        image: itemImg || "assets/hero_food_collage.png"
+      };
+
+      await repo.saveMenuItem(itemToSave);
+      alert(`Item "${itemName}" saved with custom uploaded image!`);
+      handleCancelEdit();
+      loadDashboard();
+    };
+
+    const handleDeleteMenuItem = async (id) => {
+      if (confirm("Are you sure you want to delete this menu item?")) {
+        await repo.deleteMenuItem(id);
+        loadDashboard();
+      }
+    };
+
+    const totalRevenue = orders.filter(o => o.status === 'delivered').reduce((acc, o) => acc + (parseFloat(o.total)||0), 0);
+    const activeCount = orders.filter(o => ['received', 'queue', 'cooking', 'packing', 'delivery'].includes(o.status)).length;
+
+    if (!isAdmin) {
+      return React.createElement('main', { className: 'section-container page-top-margin admin-page' },
+        React.createElement('div', { style: { maxWidth: '400px', margin: '40px auto', background: 'var(--bg-panel)', padding: '30px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('h2', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Admin Portal Login'),
+          React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); const s = await repo.loginAdmin(u, p); setIsAdmin(s); } },
+            React.createElement('input', { value: u, onChange: e => setU(e.target.value), placeholder: 'Username', style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
+            React.createElement('input', { type: 'password', value: p, onChange: e => setP(e.target.value), placeholder: 'Password', style: { width: '100%', padding: '10px', marginBottom: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
+            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Login ➔')
+          )
+        )
+      );
+    }
+
+    return React.createElement('main', { className: 'section-container page-top-margin admin-page' },
+      
+      // Header Bar
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' } },
+        React.createElement('h1', { className: 'section-title', style: { margin: 0 } }, 'Admin Control Dashboard'),
+        React.createElement('button', { className: 'btn btn-outline', onClick: () => { repo.logoutAdmin(); setIsAdmin(false); } }, 'Logout 🚪')
+      ),
+
+      // Admin Tab Navigation
+      React.createElement('div', { style: { display: 'flex', gap: '10px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '5px' } },
+        [
+          { id: 'orders', label: '⚡ Live Orders Queue' },
+          { id: 'menu_editor', label: '📖 Menu & Categories Editor' },
+          { id: 'invoices', label: '📜 Invoice History' },
+          { id: 'settings', label: '⚙️ Delivery & Capacity' },
+          { id: 'reviews', label: '⭐ Moderation' },
+          { id: 'admin_settings', label: '🔧 Admin Settings' }
+        ].map(t => React.createElement('button', {
+          key: t.id,
+          onClick: () => setAdminTab(t.id),
+          style: {
+            padding: '10px 16px',
+            borderRadius: '4px',
+            background: adminTab === t.id ? 'var(--primary)' : 'var(--bg-panel)',
+            color: '#fff',
+            border: '1px solid var(--border)',
+            cursor: 'pointer',
+            fontWeight: adminTab === t.id ? 'bold' : 'normal'
+          }
+        }, t.label))
+      ),
+
+      // KPI Summary Cards
+      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginBottom: '25px' } },
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', textAlign: 'center' } },
+          React.createElement('div', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, 'Total Sales Revenue'),
+          React.createElement('div', { style: { fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${totalRevenue.toLocaleString()}`)
+        ),
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', textAlign: 'center' } },
+          React.createElement('div', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, 'Total Orders Placed'),
+          React.createElement('div', { style: { fontSize: '1.5rem', fontWeight: 'bold' } }, orders.length)
+        ),
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', textAlign: 'center' } },
+          React.createElement('div', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, 'Active Kitchen Queue'),
+          React.createElement('div', { style: { fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)' } }, activeCount)
+        ),
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', textAlign: 'center' } },
+          React.createElement('div', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, 'Delivered Completed'),
+          React.createElement('div', { style: { fontSize: '1.5rem', fontWeight: 'bold', color: '#4caf50' } }, orders.filter(o => o.status === 'delivered').length)
+        )
+      ),
+
+      // TAB 1: LIVE ORDERS QUEUE
+      adminTab === 'orders' ? React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Live Orders Feed'),
+        React.createElement('div', { style: { overflowX: 'auto' } },
+          React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' } },
+            React.createElement('thead', null,
+              React.createElement('tr', { style: { borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' } },
+                React.createElement('th', { style: { padding: '8px' } }, 'ID'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Customer'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Items'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Total'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Status Stage'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Actions')
+              )
+            ),
+            React.createElement('tbody', null,
+              orders.map(o => React.createElement('tr', { key: o.id, style: { borderBottom: '1px solid var(--border-light)' } },
+                React.createElement('td', { style: { padding: '10px', fontWeight: 'bold', color: 'var(--accent)' } }, o.id),
+                React.createElement('td', { style: { padding: '10px' } },
+                  React.createElement('strong', null, o.customer?.name), React.createElement('br'),
+                  React.createElement('span', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, o.customer?.phone)
+                ),
+                React.createElement('td', { style: { padding: '10px', fontSize: '0.85rem' } }, (o.items||[]).map(i => `${i.quantity}x ${i.name}`).join(", ")),
+                React.createElement('td', { style: { padding: '10px', fontWeight: 'bold' } }, `Rs. ${o.total}`),
+                React.createElement('td', { style: { padding: '10px' } },
+                  React.createElement('select', {
+                    value: o.status,
+                    onChange: async (e) => { await repo.updateOrderStatus(o.id, e.target.value); loadDashboard(); },
+                    style: { padding: '6px', background: 'var(--bg-elevated)', color: '#fff', border: '1px solid var(--border)', borderRadius: '4px' }
+                  },
+                    ['received', 'queue', 'cooking', 'packing', 'delivery', 'delivered', 'cancelled'].map(s => React.createElement('option', { key: s, value: s }, s))
+                  )
+                ),
+                React.createElement('td', { style: { padding: '10px' } },
+                  React.createElement('button', {
+                    onClick: () => handlePrintInvoice(o),
+                    style: { padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', cursor: 'pointer', borderRadius: '4px' }
+                  }, '🖨️ Print Invoice')
+                )
+              ))
+            )
+          )
+        )
+      ) : null,
+
+      // TAB 2: MENU & CATEGORIES EDITOR WITH CUSTOM LOCAL FILE UPLOAD SUPPORT FROM PC
+      adminTab === 'menu_editor' ? React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' } },
+        
+        // Add / Edit Menu Item Form with PC File Upload Control & Live Preview
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' } },
+            React.createElement('h3', { style: { color: 'var(--accent)', margin: 0 } }, editingItem ? `✏️ Edit Item (${editingItem.name})` : '➕ Add New Menu Item'),
+            editingItem ? React.createElement('button', { onClick: handleCancelEdit, style: { background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer' } }, 'Cancel ❌') : null
+          ),
+          React.createElement('form', { onSubmit: handleSaveMenuItem },
+            
+            // Image Preview, PC File Upload & Preset Picker Section
+            React.createElement('div', { style: { marginBottom: '15px', background: 'var(--bg-elevated)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border-light)' } },
+              React.createElement('div', { style: { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '10px' } },
+                React.createElement('img', { src: itemImg || 'assets/hero_food_collage.png', alt: 'Preview', style: { width: '75px', height: '75px', objectFit: 'cover', borderRadius: '6px', border: '2px solid var(--accent)' } }),
+                React.createElement('div', { style: { flex: 1 } },
+                  React.createElement('label', { style: { display: 'block', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '4px', color: 'var(--accent)' } }, '📁 Upload Custom Photo from PC:'),
+                  React.createElement('input', {
+                    type: 'file',
+                    accept: 'image/*',
+                    onChange: handleFileUpload,
+                    style: { width: '100%', fontSize: '0.8rem', color: 'var(--text-muted)' }
+                  })
+                )
+              ),
+              React.createElement('div', { style: { borderTop: '1px dashed var(--border-light)', paddingTop: '8px' } },
+                React.createElement('label', { style: { display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' } }, 'Or select existing asset preset / enter URL:'),
+                React.createElement('select', { value: itemImg, onChange: e => setItemImg(e.target.value), style: { width: '100%', padding: '6px', background: 'var(--bg-dark)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', fontSize: '0.8rem' } },
+                  assetOptions.map(opt => React.createElement('option', { key: opt.path, value: opt.path }, opt.label))
+                )
+              )
+            ),
+
+            React.createElement('div', { style: { marginBottom: '10px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Item Name'),
+              React.createElement('input', { required: true, value: itemName, onChange: e => setItemName(e.target.value), placeholder: 'e.g. Malai Boti Pizza', style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '10px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Category'),
+              React.createElement('select', { value: itemCat, onChange: e => setItemCat(e.target.value), style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } },
+                [
+                  { id: 'pizza', label: 'Pizzas' },
+                  { id: 'special_pizza', label: 'Special Pizza' },
+                  { id: 'burgers', label: 'Burgers' },
+                  { id: 'wraps', label: 'Wraps & Rolls' },
+                  { id: 'desi', label: 'Desi & Broast' },
+                  { id: 'starters', label: 'Starters' },
+                  { id: 'pasta', label: 'Pastas' }
+                ].map(c => React.createElement('option', { key: c.id, value: c.id }, c.label))
+              )
+            ),
+
+            // Price Fields
+            (itemCat === 'pizza' || itemCat === 'special_pizza') ? React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' } },
+              React.createElement('div', null,
+                React.createElement('label', { style: { display: 'block', fontSize: '0.75rem' } }, 'Small Price (Rs.)'),
+                React.createElement('input', { type: 'number', value: priceSmall, onChange: e => setPriceSmall(e.target.value), style: { width: '100%', padding: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { style: { display: 'block', fontSize: '0.75rem' } }, 'Regular Price (Rs.)'),
+                React.createElement('input', { type: 'number', value: priceRegular, onChange: e => setPriceRegular(e.target.value), style: { width: '100%', padding: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { style: { display: 'block', fontSize: '0.75rem' } }, 'Large Price (Rs.)'),
+                React.createElement('input', { type: 'number', value: priceLarge, onChange: e => setPriceLarge(e.target.value), style: { width: '100%', padding: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { style: { display: 'block', fontSize: '0.75rem' } }, 'XL Price (Rs.)'),
+                React.createElement('input', { type: 'number', value: priceXlarge, onChange: e => setPriceXlarge(e.target.value), style: { width: '100%', padding: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+              )
+            ) : React.createElement('div', { style: { marginBottom: '10px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Price (Rs.)'),
+              React.createElement('input', { type: 'number', required: true, value: itemPrice, onChange: e => setItemPrice(e.target.value), style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+
+            React.createElement('div', { style: { marginBottom: '15px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Description'),
+              React.createElement('textarea', { rows: 2, value: itemDesc, onChange: e => setItemDesc(e.target.value), placeholder: 'Ingredients and details...', style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+              React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { flex: 1, justifyContent: 'center' } }, editingItem ? 'Save Changes 💾' : 'Add Item ➕'),
+              editingItem ? React.createElement('button', { type: 'button', onClick: handleCancelEdit, className: 'btn btn-outline', style: { padding: '0 15px' } }, 'Cancel') : null
+            )
+          )
+        ),
+
+        // Category Filter & Existing Items List with Image Thumbnails
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' } },
+            React.createElement('h3', { style: { color: 'var(--accent)', margin: 0 } }, 'Menu Catalog'),
+            React.createElement('select', { value: selectedCategory, onChange: e => setSelectedCategory(e.target.value), style: { padding: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } },
+              ['pizza', 'special_pizza', 'burgers', 'wraps', 'desi', 'starters', 'pasta'].map(c => React.createElement('option', { key: c, value: c }, c.toUpperCase()))
+            )
+          ),
+          React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
+            menuItems.filter(i => i.category === selectedCategory).map(item => React.createElement('div', { key: item.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-elevated)', marginBottom: '8px', borderRadius: '4px', border: editingItem?.id === item.id ? '1px solid var(--accent)' : '1px solid var(--border)' } },
+              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+                React.createElement('img', { src: item.image || 'assets/hero_food_collage.png', alt: item.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
+                React.createElement('div', null,
+                  React.createElement('strong', { style: { color: 'var(--text-main)' } }, item.name),
+                  React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--accent)' } }, item.prices ? Object.entries(item.prices).map(([k, v]) => `${k}: Rs.${v}`).join(" | ") : 'Rs. 0')
+                )
+              ),
+              React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+                React.createElement('button', { onClick: () => handleStartEdit(item), style: { background: 'var(--bg-panel)', color: 'var(--accent)', border: '1px solid var(--accent)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' } }, '✏️ Edit'),
+                React.createElement('button', { onClick: () => handleDeleteMenuItem(item.id), style: { background: 'var(--primary)', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' } }, '🗑️ Delete')
+              )
+            ))
+          )
+        )
+      ) : null,
+
+      // TAB 3: INVOICE HISTORY
+      adminTab === 'invoices' ? React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, '📜 Complete Invoice History'),
+        React.createElement('div', { style: { overflowX: 'auto' } },
+          React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' } },
+            React.createElement('thead', null,
+              React.createElement('tr', { style: { borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' } },
+                React.createElement('th', { style: { padding: '8px' } }, 'Order ID'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Date'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Customer'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Total Amount'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Status'),
+                React.createElement('th', { style: { padding: '8px' } }, 'Invoice Action')
+              )
+            ),
+            React.createElement('tbody', null,
+              orders.map(o => React.createElement('tr', { key: o.id, style: { borderBottom: '1px solid var(--border-light)' } },
+                React.createElement('td', { style: { padding: '10px', fontWeight: 'bold', color: 'var(--accent)' } }, o.id),
+                React.createElement('td', { style: { padding: '10px', fontSize: '0.8rem' } }, new Date(o.createdAt || Date.now()).toLocaleDateString()),
+                React.createElement('td', { style: { padding: '10px' } }, o.customer?.name),
+                React.createElement('td', { style: { padding: '10px', fontWeight: 'bold' } }, `Rs. ${o.total}`),
+                React.createElement('td', { style: { padding: '10px' } }, o.status),
+                React.createElement('td', { style: { padding: '10px' } },
+                  React.createElement('button', { onClick: () => handlePrintInvoice(o), style: { padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', cursor: 'pointer', borderRadius: '4px' } }, '🖨️ View/Print Receipt')
+                )
+              ))
+            )
+          )
+        )
+      ) : null,
+
+      // TAB 4: DELIVERY & CAPACITY SETTINGS
+      adminTab === 'settings' ? React.createElement('div', { style: { maxWidth: '480px', background: 'var(--bg-panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' } },
+        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Delivery & Capacity Settings'),
+        React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); await repo.saveDeliverySettings(enabledInput, feeInput, maxInput); alert("Delivery settings saved successfully!"); loadDashboard(); } },
+          React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', cursor: 'pointer' } },
+            React.createElement('input', { type: 'checkbox', checked: enabledInput, onChange: e => setEnabledInput(e.target.checked) }),
+            React.createElement('span', { style: { fontWeight: 'bold' } }, 'Enable Delivery Charges')
+          ),
+          React.createElement('div', { style: { marginBottom: '14px' } },
+            React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Delivery Fee (Rs.)'),
+            React.createElement('input', { type: 'number', value: feeInput, onChange: e => setFeeInput(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+          ),
+          React.createElement('div', { style: { marginBottom: '20px' } },
+            React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Max Kitchen Orders Cap'),
+            React.createElement('input', { type: 'number', value: maxInput, onChange: e => setMaxInput(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+          ),
+          React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Save Settings 💾')
+        )
+      ) : null,
+
+      // TAB 5: REVIEWS MODERATION
+      adminTab === 'reviews' ? React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, `Pending Customer Reviews (${pendingReviews.length})`),
+        pendingReviews.length === 0 ? React.createElement('p', { style: { color: 'var(--text-muted)' } }, 'No pending reviews to moderate.') :
+        pendingReviews.map(r => React.createElement('div', { key: r.id, style: { padding: '12px', background: 'var(--bg-elevated)', borderRadius: '4px', marginBottom: '10px' } },
+          React.createElement('strong', null, `${r.name} (${'⭐'.repeat(r.rating)})`),
+          React.createElement('p', { style: { margin: '6px 0', fontSize: '0.85rem', color: 'var(--text-muted)' } }, `"${r.comment}"`),
+          React.createElement('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
+            React.createElement('button', { onClick: async () => { await repo.approveReview(r.id); loadDashboard(); }, style: { padding: '6px 12px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' } }, 'Approve & Publish ✅'),
+            React.createElement('button', { onClick: async () => { await repo.deleteReview(r.id); loadDashboard(); }, style: { padding: '6px 12px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' } }, 'Delete 🗑️')
+          )
+        ))
+      ) : null,
+
+      // TAB 6: ADMIN SETTINGS (Credentials + Restaurant Info)
+      adminTab === 'admin_settings' ? React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' } },
+
+        // ─── CHANGE CREDENTIALS PANEL ─────────────────────────────────────
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0, marginBottom: '6px' } }, '🔐 Change Admin Credentials'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '18px', marginTop: 0 } }, 'Update your admin username and password. You will need your current password to make changes.'),
+
+          settingsMsg.text ? React.createElement('div', {
+            style: {
+              padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', fontSize: '0.9rem', fontWeight: 'bold',
+              background: settingsMsg.type === 'success' ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.15)',
+              border: `1px solid ${settingsMsg.type === 'success' ? '#4caf50' : '#f44336'}`,
+              color: settingsMsg.type === 'success' ? '#4caf50' : '#ff6b6b'
+            }
+          }, settingsMsg.text) : null,
+
+          React.createElement('form', {
+            onSubmit: async (e) => {
+              e.preventDefault();
+              setSettingsMsg({ type: '', text: '' });
+              const creds = await repo.getAdminCredentials();
+              if (currentPassInput !== creds.password) {
+                setSettingsMsg({ type: 'error', text: '❌ Current password is incorrect. Please try again.' });
+                return;
+              }
+              if (!newUsernameInput.trim()) {
+                setSettingsMsg({ type: 'error', text: '❌ Username cannot be empty.' });
+                return;
+              }
+              if (newPassInput && newPassInput.length < 6) {
+                setSettingsMsg({ type: 'error', text: '❌ New password must be at least 6 characters long.' });
+                return;
+              }
+              if (newPassInput && newPassInput !== confirmPassInput) {
+                setSettingsMsg({ type: 'error', text: '❌ New passwords do not match.' });
+                return;
+              }
+              const finalPass = newPassInput || creds.password;
+              await repo.changeAdminCredentials(newUsernameInput.trim(), finalPass);
+              setCurrentPassInput('');
+              setNewPassInput('');
+              setConfirmPassInput('');
+              setSettingsMsg({ type: 'success', text: '✅ Admin credentials updated successfully!' });
+              setTimeout(() => setSettingsMsg({ type: '', text: '' }), 4000);
+            }
+          },
+            React.createElement('div', { style: { marginBottom: '12px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '5px', color: 'var(--text-muted)' } }, 'Current Password *'),
+              React.createElement('input', {
+                type: 'password', required: true, value: currentPassInput,
+                onChange: e => setCurrentPassInput(e.target.value),
+                placeholder: 'Enter your current password',
+                style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }
+              })
+            ),
+            React.createElement('div', { style: { borderTop: '1px dashed var(--border)', paddingTop: '14px', marginBottom: '12px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '5px' } }, 'New Username'),
+              React.createElement('input', {
+                type: 'text', value: newUsernameInput,
+                onChange: e => setNewUsernameInput(e.target.value),
+                placeholder: 'e.g. admin or habibi_admin',
+                style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }
+              })
+            ),
+            React.createElement('div', { style: { marginBottom: '12px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '5px' } }, 'New Password (leave blank to keep current)'),
+              React.createElement('input', {
+                type: 'password', value: newPassInput,
+                onChange: e => setNewPassInput(e.target.value),
+                placeholder: 'Min. 6 characters',
+                style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }
+              })
+            ),
+            React.createElement('div', { style: { marginBottom: '20px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '5px' } }, 'Confirm New Password'),
+              React.createElement('input', {
+                type: 'password', value: confirmPassInput,
+                onChange: e => setConfirmPassInput(e.target.value),
+                placeholder: 'Re-enter new password',
+                style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }
+              })
+            ),
+            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, '🔐 Update Credentials')
+          ),
+
+          // Danger Zone
+          React.createElement('div', { style: { marginTop: '24px', padding: '14px', background: 'rgba(244,67,54,0.07)', border: '1px solid rgba(244,67,54,0.3)', borderRadius: '6px' } },
+            React.createElement('h4', { style: { color: '#ff6b6b', margin: '0 0 6px 0', fontSize: '0.95rem' } }, '⚠️ Danger Zone'),
+            React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0 0 10px 0' } }, 'This will permanently clear ALL order history and invoice records. This action cannot be undone.'),
+            React.createElement('button', {
+              type: 'button',
+              onClick: () => { setDangerModalStep(1); setDangerConfirmText(''); },
+              style: { padding: '8px 16px', background: 'rgba(244,67,54,0.2)', border: '1px solid #f44336', color: '#ff6b6b', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }
+            }, '🗑️ Clear All Order History')
+          ),
+
+          // ─── 2-STEP CUSTOM DANGER CONFIRMATION MODAL ─────────────────────
+          dangerModalStep > 0 ? React.createElement('div', {
+            style: { position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
+          },
+            React.createElement('div', { style: { width: '100%', maxWidth: '440px', background: '#1a1a2e', border: '2px solid #f44336', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 60px rgba(244,67,54,0.4)' } },
+
+              // Modal Header
+              React.createElement('div', { style: { background: 'rgba(244,67,54,0.15)', padding: '16px 20px', borderBottom: '1px solid rgba(244,67,54,0.3)', display: 'flex', alignItems: 'center', gap: '10px' } },
+                React.createElement('span', { style: { fontSize: '1.4rem' } }, '⚠️'),
+                React.createElement('div', null,
+                  React.createElement('div', { style: { color: '#ff6b6b', fontWeight: 'bold', fontSize: '1rem' } }, 'Delete All Order History'),
+                  React.createElement('div', { style: { color: 'var(--text-muted)', fontSize: '0.75rem' } }, `Step ${dangerModalStep} of 2 — ${dangerModalStep === 1 ? 'Review what will be deleted' : 'Type DELETE to confirm'}`)
+                )
+              ),
+
+              // STEP 1: Review warning
+              dangerModalStep === 1 ? React.createElement('div', { style: { padding: '20px' } },
+                React.createElement('p', { style: { color: '#fff', marginTop: 0, marginBottom: '14px' } }, 'You are about to permanently delete:'),
+                React.createElement('ul', { style: { color: '#ff6b6b', paddingLeft: '20px', margin: '0 0 18px 0', lineHeight: '2' } },
+                  React.createElement('li', null, '🗃️ All order records'),
+                  React.createElement('li', null, '📜 Complete invoice history'),
+                  React.createElement('li', null, '🔢 Order ID counter (resets to start)')
+                ),
+                React.createElement('div', { style: { background: 'rgba(244,67,54,0.1)', border: '1px solid rgba(244,67,54,0.3)', borderRadius: '6px', padding: '10px 12px', marginBottom: '18px' } },
+                  React.createElement('span', { style: { color: '#ff6b6b', fontSize: '0.82rem', fontWeight: 'bold' } }, '🔴 This action is PERMANENT and CANNOT be undone. Menu items and settings are NOT affected.')
+                ),
+                React.createElement('div', { style: { display: 'flex', gap: '10px' } },
+                  React.createElement('button', {
+                    onClick: () => { setDangerModalStep(0); setDangerConfirmText(''); },
+                    style: { flex: 1, padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+                  }, '← Cancel, Keep Data'),
+                  React.createElement('button', {
+                    onClick: () => { setDangerModalStep(2); setDangerConfirmText(''); },
+                    style: { flex: 1, padding: '10px', background: 'rgba(244,67,54,0.3)', border: '1px solid #f44336', color: '#ff6b6b', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+                  }, 'I Understand → Continue')
+                )
+              ) : null,
+
+              // STEP 2: Type DELETE to confirm
+              dangerModalStep === 2 ? React.createElement('div', { style: { padding: '20px' } },
+                React.createElement('p', { style: { color: '#fff', marginTop: 0, marginBottom: '6px' } }, 'To confirm deletion, type ', React.createElement('strong', { style: { color: '#f44336', letterSpacing: '2px' } }, 'DELETE'), ' in the box below:'),
+                React.createElement('input', {
+                  type: 'text',
+                  value: dangerConfirmText,
+                  onChange: e => setDangerConfirmText(e.target.value),
+                  placeholder: 'Type DELETE here...',
+                  autoFocus: true,
+                  style: { width: '100%', padding: '12px', background: 'rgba(244,67,54,0.08)', border: '2px solid rgba(244,67,54,0.4)', color: dangerConfirmText === 'DELETE' ? '#f44336' : '#fff', borderRadius: '6px', fontSize: '1rem', letterSpacing: '2px', fontWeight: 'bold', boxSizing: 'border-box', outline: 'none', marginBottom: '16px' }
+                }),
+                React.createElement('div', { style: { display: 'flex', gap: '10px' } },
+                  React.createElement('button', {
+                    onClick: () => { setDangerModalStep(0); setDangerConfirmText(''); },
+                    style: { flex: 1, padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+                  }, '← Go Back'),
+                  React.createElement('button', {
+                    disabled: dangerConfirmText !== 'DELETE',
+                    onClick: async () => {
+                      if (dangerConfirmText !== 'DELETE') return;
+                      localStorage.removeItem(DB_KEYS.ORDERS);
+                      localStorage.removeItem(DB_KEYS.LAST_ORDER_ID);
+                      setDangerModalStep(0);
+                      setDangerConfirmText('');
+                      await loadDashboard();
+                      setSettingsMsg({ type: 'success', text: '✅ All order history has been permanently cleared.' });
+                      setTimeout(() => setSettingsMsg({ type: '', text: '' }), 5000);
+                    },
+                    style: {
+                      flex: 1, padding: '10px',
+                      background: dangerConfirmText === 'DELETE' ? '#c62828' : 'rgba(244,67,54,0.1)',
+                      border: '1px solid #f44336', color: dangerConfirmText === 'DELETE' ? '#fff' : 'rgba(255,107,107,0.4)',
+                      borderRadius: '6px', cursor: dangerConfirmText === 'DELETE' ? 'pointer' : 'not-allowed',
+                      fontWeight: 'bold', transition: 'all 0.2s ease'
+                    }
+                  }, '🗑️ Yes, Delete Everything')
+                )
+              ) : null
+
+            )
+          ) : null
+        ),
+
+        // ─── RESTAURANT BRANDING INFO PANEL ──────────────────────────────
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0, marginBottom: '6px' } }, '🏪 Restaurant Info & Branding'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '18px', marginTop: 0 } }, 'Update the restaurant name, address, and contact info shown on receipts and the storefront footer.'),
+
+          React.createElement('form', {
+            onSubmit: async (e) => {
+              e.preventDefault();
+              await repo.saveRestaurantInfo({ name: restName, tagline: restTagline, address: restAddress, phone: restPhone, email: restEmail });
+              setSettingsMsg({ type: 'success', text: '✅ Restaurant info saved! Receipts will reflect the new details.' });
+              setTimeout(() => setSettingsMsg({ type: '', text: '' }), 4000);
+            }
+          },
+            [
+              { label: '🏠 Restaurant Name', value: restName, setter: setRestName, placeholder: 'e.g. Habibi Bites' },
+              { label: '💬 Tagline / Slogan', value: restTagline, setter: setRestTagline, placeholder: 'e.g. Fast Food & Traditional Kitchen' },
+              { label: '📍 Full Address', value: restAddress, setter: setRestAddress, placeholder: 'e.g. Qila Didar Singh, Gujranwala' },
+              { label: '📞 Phone Number', value: restPhone, setter: setRestPhone, placeholder: 'e.g. 0300-1234567' },
+              { label: '📧 Email Address', value: restEmail, setter: setRestEmail, placeholder: 'e.g. info@habibibites.com' }
+            ].map(field =>
+              React.createElement('div', { key: field.label, style: { marginBottom: '12px' } },
+                React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '5px' } }, field.label),
+                React.createElement('input', {
+                  type: 'text', value: field.value,
+                  onChange: e => field.setter(e.target.value),
+                  placeholder: field.placeholder,
+                  style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }
+                })
+              )
+            ),
+            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center', marginTop: '8px' } }, '💾 Save Restaurant Info'),
+
+            // Info Preview Card
+            React.createElement('div', { style: { marginTop: '18px', padding: '14px', background: 'var(--bg-elevated)', borderRadius: '6px', border: '1px solid var(--border-light)', fontFamily: 'monospace', fontSize: '0.8rem', lineHeight: '1.7' } },
+              React.createElement('div', { style: { fontWeight: 'bold', color: 'var(--accent)', marginBottom: '4px' } }, '📄 Receipt Preview:'),
+              React.createElement('div', { style: { textAlign: 'center', color: 'var(--text-muted)' } },
+                React.createElement('div', { style: { fontWeight: 'bold', fontSize: '1rem', color: '#fff' } }, restName.toUpperCase()),
+                React.createElement('div', null, restTagline),
+                React.createElement('div', null, restAddress),
+                React.createElement('div', null, `Ph: ${restPhone}`)
+              )
+            )
+          )
+        )
+
+      ) : null
+    );
+  }
+
+  function ReviewsView() {
+    const [reviews, setReviews] = useState([]);
+    const [name, setName] = useState('');
+    const [rating, setRating] = useState(5);
+    const [comment, setComment] = useState('');
+    const [showModal, setShowModal] = useState(false);
+
+    useEffect(() => { repo.getReviews().then(setReviews); }, []);
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      if (!name || !comment) return;
+      await repo.addReview(name, rating, comment);
+      alert("Review submitted! It will appear on the storefront after Admin approval.");
+      setShowModal(false); setName(''); setComment('');
+    };
+
+    return React.createElement('main', { className: 'section-container page-top-margin' },
+      React.createElement('div', { className: 'section-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap' } },
+        React.createElement('div', null,
+          React.createElement('span', { className: 'section-subtitle' }, 'Customer Reviews'),
+          React.createElement('h1', { className: 'section-title' }, 'What Food Lovers Say')
+        ),
+        React.createElement('button', { className: 'btn btn-primary', onClick: () => setShowModal(true) }, 'Write a Review ⭐')
+      ),
+      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginTop: '20px' } },
+        reviews.map(r => React.createElement('div', { key: r.id, style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('strong', null, r.name),
+          React.createElement('div', { style: { color: 'var(--accent)', margin: '4px 0' } }, '⭐'.repeat(r.rating)),
+          React.createElement('p', { style: { color: 'var(--text-muted)' } }, `"${r.comment}"`)
+        ))
+      ),
+
+      showModal ? React.createElement('div', { className: 'modal-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+        React.createElement('div', { style: { width: '400px', background: 'var(--bg-dark)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Write a Review'),
+          React.createElement('form', { onSubmit: handleSubmit },
+            React.createElement('input', { required: true, value: name, onChange: e => setName(e.target.value), placeholder: 'Your Name', style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
+            React.createElement('select', { value: rating, onChange: e => setRating(e.target.value), style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } },
+              [5, 4, 3, 2, 1].map(num => React.createElement('option', { key: num, value: num }, `${'⭐'.repeat(num)} (${num}/5)`))
+            ),
+            React.createElement('textarea', { required: true, rows: 3, value: comment, onChange: e => setComment(e.target.value), placeholder: 'Your Feedback...', style: { width: '100%', padding: '10px', marginBottom: '15px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
+            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Submit Review ➔')
+          )
+        )
+      ) : null
+    );
+  }
+
+  function ContactView() {
+    const [cName, setCName] = React.useState('');
+    const [cEmail, setCEmail] = React.useState('');
+    const [cMsg, setCMsg] = React.useState('');
+
+    const handleWhatsApp = (e) => {
+      e.preventDefault();
+      if (!cName.trim() || !cMsg.trim()) return;
+      const text = `Hi Habibi Bites! 👋\n\nName: ${cName.trim()}\nEmail: ${cEmail.trim() || 'N/A'}\n\nMessage:\n${cMsg.trim()}`;
+      const waUrl = `https://wa.me/923001234567?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, '_blank');
+    };
+
+    const inpStyle = {
+      width: '100%', padding: '12px 14px', background: 'rgba(255,255,255,0.05)',
+      border: '1.5px solid rgba(255,255,255,0.12)', color: '#fff', borderRadius: '8px',
+      fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none'
+    };
+    const labelStyle = { display: 'block', fontSize: '0.78rem', fontWeight: '600', marginBottom: '6px', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' };
+    const cardStyle = { background: 'var(--bg-panel)', padding: '26px', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' };
+
+    return React.createElement('main', { className: 'section-container page-top-margin' },
+
+      // Page Header
+      React.createElement('div', { className: 'section-header', style: { textAlign: 'center', marginBottom: '36px' } },
+        React.createElement('span', { className: 'section-subtitle' }, "We'd Love to Hear From You"),
+        React.createElement('h1', { className: 'section-title' }, 'Contact Habibi Bites')
+      ),
+
+      // ── ROW 1: 3 Equal Cards ─────────────────────────────────────────────
+      React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '22px', alignItems: 'stretch' } },
+
+        // CARD 1 — Send Us a Message
+        React.createElement('div', { style: cardStyle },
+          React.createElement('h2', { style: { color: '#fff', marginTop: 0, marginBottom: '5px', fontSize: '1.1rem' } }, '💬 Send Us a Message'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Fill in the form below and your message will open directly in WhatsApp.'),
+          React.createElement('form', { onSubmit: handleWhatsApp, style: { display: 'flex', flexDirection: 'column', flex: 1 } },
+            React.createElement('div', { style: { marginBottom: '12px' } },
+              React.createElement('label', { style: labelStyle }, 'Full Name'),
+              React.createElement('input', { required: true, type: 'text', value: cName, onChange: e => setCName(e.target.value), placeholder: 'e.g. Ahmed Ali', style: inpStyle })
+            ),
+            React.createElement('div', { style: { marginBottom: '12px' } },
+              React.createElement('label', { style: labelStyle }, 'Email Address'),
+              React.createElement('input', { type: 'email', value: cEmail, onChange: e => setCEmail(e.target.value), placeholder: 'john@example.com (optional)', style: inpStyle })
+            ),
+            React.createElement('div', { style: { marginBottom: '16px', flex: 1 } },
+              React.createElement('label', { style: labelStyle }, 'Message'),
+              React.createElement('textarea', { required: true, rows: 4, value: cMsg, onChange: e => setCMsg(e.target.value), placeholder: "Hi Habibi Bites, I'd like to ask about...", style: { ...inpStyle, resize: 'vertical', lineHeight: '1.6' } })
+            ),
+            React.createElement('button', {
+              type: 'submit',
+              style: { width: '100%', padding: '12px', background: 'linear-gradient(135deg,#25d366,#128c7e)', border: 'none', color: '#fff', borderRadius: '8px', fontSize: '0.92rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(37,211,102,0.3)', marginTop: 'auto' }
+            },
+              React.createElement('svg', { width: '19', height: '19', viewBox: '0 0 24 24', fill: '#fff' },
+                React.createElement('path', { d: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z' })
+              ),
+              'Send via WhatsApp'
+            )
+          )
+        ),
+
+        // CARD 2 — Get In Touch
+        React.createElement('div', { style: cardStyle },
+          React.createElement('h2', { style: { color: '#fff', marginTop: 0, marginBottom: '5px', fontSize: '1.1rem' } }, '📞 Get In Touch'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Have questions or need help with your order? Reach us through any channel below.'),
+          [
+            { icon: '📍', label: 'Address', value: 'Main Boulevard, Qila Didar Singh, Gujranwala, Punjab, Pakistan.' },
+            { icon: '📞', label: 'Phone', value: '0300-1234567 / 0321-7654321' },
+            { icon: '🕐', label: 'Hours', value: '12:00 PM – 2:00 AM (Daily)' },
+            { icon: '📧', label: 'Email', value: 'habibibites@gmail.com' }
+          ].map(item =>
+            React.createElement('div', { key: item.label, style: { display: 'flex', gap: '11px', marginBottom: '12px', alignItems: 'flex-start', padding: '11px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.07)' } },
+              React.createElement('span', { style: { fontSize: '1.15rem', flexShrink: 0, marginTop: '1px' } }, item.icon),
+              React.createElement('div', null,
+                React.createElement('div', { style: { fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px' } }, item.label),
+                React.createElement('div', { style: { color: '#fff', fontSize: '0.87rem', lineHeight: '1.5' } }, item.value)
+              )
+            )
+          )
+        ),
+
+        // CARD 3 — Follow Us
+        React.createElement('div', { style: cardStyle },
+          React.createElement('h2', { style: { color: '#fff', marginTop: 0, marginBottom: '5px', fontSize: '1.1rem' } }, '🌐 Follow Us'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Stay connected for the latest deals, menu drops, and behind-the-scenes content.'),
+
+          // Instagram
+          React.createElement('a', {
+            href: 'https://instagram.com/habibibites', target: '_blank', rel: 'noopener noreferrer',
+            style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', textDecoration: 'none', marginBottom: '12px', boxShadow: '0 3px 14px rgba(220,39,67,0.3)' }
+          },
+            React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
+              React.createElement('path', { d: 'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z' })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'Instagram'),
+              React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, '@habibibites')
+            )
+          ),
+
+          // Facebook
+          React.createElement('a', {
+            href: 'https://facebook.com/habibibites', target: '_blank', rel: 'noopener noreferrer',
+            style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: '#1877f2', color: '#fff', textDecoration: 'none', marginBottom: '12px', boxShadow: '0 3px 14px rgba(24,119,242,0.3)' }
+          },
+            React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
+              React.createElement('path', { d: 'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z' })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'Facebook'),
+              React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, 'Habibi Bites')
+            )
+          ),
+
+          // TikTok
+          React.createElement('a', {
+            href: 'https://tiktok.com/@habibibites', target: '_blank', rel: 'noopener noreferrer',
+            style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: '#010101', border: '1px solid rgba(255,255,255,0.13)', color: '#fff', textDecoration: 'none', marginBottom: '0', boxShadow: '0 3px 14px rgba(0,0,0,0.4)' }
+          },
+            React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
+              React.createElement('path', { d: 'M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.32 6.32 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.02-.05z' })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'TikTok'),
+              React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, '@habibibites')
+            )
+          ),
+
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.73rem', marginTop: '14px', marginBottom: 0, textAlign: 'center' } }, '🔗 Links will be updated soon!')
+        )
+      ),
+
+      // ── ROW 2: Google Maps Full Width ─────────────────────────────────────
+      React.createElement('div', { style: { marginTop: '26px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' } },
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '13px 20px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)' } },
+          React.createElement('span', { style: { fontSize: '1.1rem' } }, '📍'),
+          React.createElement('span', { style: { fontWeight: '700', fontSize: '0.98rem' } }, 'Find Us on Google Maps'),
+          React.createElement('span', { style: { color: 'var(--text-muted)', fontSize: '0.8rem' } }, '— Qila Didar Singh, Gujranwala'),
+          React.createElement('a', {
+            href: 'https://maps.google.com/?q=Qila+Didar+Singh+Gujranwala+Pakistan',
+            target: '_blank', rel: 'noopener noreferrer',
+            style: { marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: '700', padding: '5px 12px', border: '1px solid var(--accent)', borderRadius: '6px' }
+          }, 'Open Full Map ↗')
+        ),
+        React.createElement('iframe', {
+          title: 'Habibi Bites Location — Qila Didar Singh, Gujranwala',
+          src: 'https://maps.google.com/maps?q=Qila+Didar+Singh,+Gujranwala,+Pakistan&t=&z=14&ie=UTF8&iwloc=&output=embed',
+          width: '100%',
+          height: '380',
+          style: { border: 0, display: 'block' },
+          allowFullScreen: true,
+          loading: 'lazy',
+          referrerPolicy: 'no-referrer-when-downgrade'
+        })
+      )
+    );
+  }
+
+  // --- HELPER CARD & MODAL COMPONENTS ---
+
+  function FoodCardComponent({ item, addToCart, onCustomize }) {
+    let priceDisplay = "";
+    let hasMultiple = false;
+    if (item.prices) {
+      const keys = Object.keys(item.prices);
+      if (keys.length === 1) priceDisplay = `Rs. ${item.prices[keys[0]]}`;
+      else { hasMultiple = true; priceDisplay = `From Rs. ${Math.min(...Object.values(item.prices))}`; }
+    }
+
+    return React.createElement('div', { className: 'menu-item-row', id: `item-${item.id}` },
+      React.createElement('img', {
+        src: item.image || 'assets/hero_food_collage.png',
+        className: 'menu-item-img',
+        alt: item.name,
+        onError: (e) => { e.target.onerror = null; e.target.src = 'assets/hero_food_collage.png'; }
+      }),
+      React.createElement('div', { className: 'menu-item-info' },
+        React.createElement('h3', null, item.name),
+        React.createElement('p', { className: 'menu-item-description' }, item.description)
+      ),
+      React.createElement('div', { className: 'menu-item-cta' },
+        React.createElement('div', { className: 'menu-item-main-price', style: { fontWeight: 'bold', color: 'var(--accent)' } }, priceDisplay),
+        React.createElement('button', {
+          className: 'btn btn-primary',
+          onClick: () => (hasMultiple || item.category === 'pizza' || item.category === 'special_pizza') ? onCustomize(item) : addToCart({ id: item.id, name: item.name, price: item.prices ? Object.values(item.prices)[0] : 0 })
+        }, hasMultiple ? "Choose Options" : "Add to Basket")
+      )
+    );
+  }
+
+  function DealCardComponent({ deal, addToCart }) {
+    return React.createElement('div', { className: 'deal-card', id: `deal-${deal.id}` },
+      deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
+      React.createElement('div', { className: 'deal-card-image-box', style: { height: '190px', position: 'relative', overflow: 'hidden' } },
+        React.createElement('img', {
+          src: deal.image || 'assets/hero_food_collage.png',
+          alt: deal.name,
+          style: { width: '100%', height: '100%', objectFit: 'cover' },
+          onError: (e) => { e.target.onerror = null; e.target.src = 'assets/hero_food_collage.png'; }
+        }),
+        React.createElement('div', { className: 'deal-flyer-glow-ribbon', style: { position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)' } })
+      ),
+      React.createElement('div', { className: 'deal-card-body' },
+        React.createElement('h3', { className: 'deal-card-title' }, deal.name),
+        React.createElement('p', { className: 'deal-card-contents', style: { color: 'var(--text-muted)', fontSize: '0.9rem' } }, deal.contents),
+        React.createElement('div', { className: 'deal-card-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
+          React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${deal.price}`),
+          React.createElement('button', { className: 'btn btn-primary', onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: deal.price }) }, 'Add to Basket +')
+        )
+      )
+    );
+  }
+
+  function CartDrawerModal({ cart, cartSubtotal, updateQuantity, removeFromCart, onClose, setActivePage }) {
+    return React.createElement('div', { className: 'cart-drawer-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'flex-end' } },
+      React.createElement('div', { className: 'cart-drawer active', style: { width: '100%', maxWidth: '420px', background: 'var(--bg-dark)', height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border)', right: 0 } },
+        React.createElement('div', { style: { padding: '20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+          React.createElement('h3', { style: { margin: 0 } }, `Your Basket (${cart.length})`),
+          React.createElement('button', { onClick: onClose, style: { background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' } }, '×')
+        ),
+        React.createElement('div', { style: { flex: 1, overflowY: 'auto', padding: '20px' } },
+          cart.length === 0 ? React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' } },
+            React.createElement('div', { style: { fontSize: '3rem' } }, '🛒'),
+            React.createElement('p', null, 'Your basket is empty.'),
+            React.createElement('button', { className: 'btn btn-primary', onClick: () => { onClose(); setActivePage('menu'); } }, 'Browse Menu')
+          ) : cart.map((item, idx) => React.createElement('div', { key: idx, style: { padding: '12px', background: 'var(--bg-panel)', marginBottom: '10px', borderRadius: '4px', border: '1px solid var(--border-light)' } },
+            React.createElement('strong', null, item.name),
+            React.createElement('div', { style: { color: 'var(--primary)', fontWeight: 'bold' } }, `Rs. ${item.price}`),
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' } },
+              React.createElement('div', null,
+                React.createElement('button', { onClick: () => updateQuantity(idx, item.quantity - 1), style: { padding: '2px 8px' } }, '-'),
+                React.createElement('span', { style: { padding: '0 8px' } }, item.quantity),
+                React.createElement('button', { onClick: () => updateQuantity(idx, item.quantity + 1), style: { padding: '2px 8px' } }, '+')
+              ),
+              React.createElement('button', { onClick: () => removeFromCart(idx), style: { background: 'none', border: 'none', cursor: 'pointer' } }, '🗑️')
+            )
+          ))
+        ),
+        cart.length > 0 ? React.createElement('div', { style: { padding: '20px', borderTop: '1px solid var(--border)', background: 'var(--bg-panel)' } },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '15px' } },
+            React.createElement('span', null, 'Subtotal:'),
+            React.createElement('span', { style: { color: 'var(--accent)' } }, `Rs. ${cartSubtotal.toLocaleString()}`)
+          ),
+          React.createElement('button', { className: 'btn btn-primary', style: { width: '100%', padding: '14px', justifyContent: 'center' }, onClick: () => { onClose(); setActivePage('checkout'); } }, 'Proceed to Checkout ➔')
+        ) : null
+      )
+    );
+  }
+
+  function CustomizationModalView({ item, onClose, addToCart }) {
+    const availableSizes = item?.prices ? Object.keys(item.prices) : ['default'];
+    const [size, setSize] = useState(availableSizes[0] || 'small');
+    const [crust, setCrust] = useState({ id: 'normal', name: 'Standard Crust', price: 0 });
+    const [selectedAddons, setSelectedAddons] = useState([]);
+    const [qty, setQty] = useState(1);
+
+    const crusts = [
+      { id: 'normal', name: 'Standard Pan Crust', price: 0 },
+      { id: 'cheese_crust', name: 'Cheese Stuffed Crust', price: 250 },
+      { id: 'kabab_crust', name: 'Kabab Stuffed Crust', price: 350 }
+    ];
+
+    const availableAddons = window.HABIBI_MENU?.addons || [
+      { id: "garlic_mayo", name: "Garlic Mayo Dip Sauce", price: 80 },
+      { id: "habibi_special_sauce", name: "Habibi Special Spicy Sauce", price: 100 },
+      { id: "extra_cheese", name: "Extra Cheese Slice", price: 60 },
+      { id: "extra_patty", name: "Extra Chicken Patty", price: 150 },
+      { id: "mushrooms_olives", name: "Extra Mushrooms & Olives", price: 120 }
+    ];
+
+    const basePrice = item.prices ? (item.prices[size] || Object.values(item.prices)[0] || 0) : 0;
+    const addonsTotal = selectedAddons.reduce((acc, a) => acc + a.price, 0);
+    const unitPrice = basePrice + crust.price + addonsTotal;
+    const grandTotal = unitPrice * qty;
+
+    const toggleAddon = (addon) => {
+      setSelectedAddons(prev => {
+        const exists = prev.some(a => a.id === addon.id);
+        if (exists) return prev.filter(a => a.id !== addon.id);
+        return [...prev, addon];
+      });
+    };
+
+    return React.createElement('div', { className: 'modal-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px' } },
+      React.createElement('div', { className: 'custom-modal', style: { width: '100%', maxWidth: '520px', background: 'var(--bg-dark)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' } },
+        React.createElement('div', { style: { padding: '16px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-panel)' } },
+          React.createElement('h3', { style: { margin: 0 } }, `Customize ${item.name}`),
+          React.createElement('button', { onClick: onClose, style: { background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' } }, '×')
+        ),
+        React.createElement('div', { style: { padding: '20px', maxHeight: '65vh', overflowY: 'auto' } },
+          availableSizes.length > 1 ? React.createElement('div', { style: { marginBottom: '20px' } },
+            React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '1. Select Pizza Size:'),
+            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px' } },
+              availableSizes.map(s => React.createElement('button', {
+                key: s,
+                type: 'button',
+                onClick: () => setSize(s),
+                style: { padding: '10px', borderRadius: '4px', border: size === s ? '2px solid var(--primary)' : '1px solid var(--border)', background: size === s ? 'var(--primary-glow)' : 'var(--bg-panel)', color: '#fff', cursor: 'pointer', textTransform: 'uppercase' }
+              }, `${s}`, React.createElement('br'), React.createElement('span', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, `Rs. ${item.prices[s]}`)))
+            )
+          ) : null,
+          (item.category === 'pizza' || item.category === 'special_pizza') ? React.createElement('div', { style: { marginBottom: '20px' } },
+            React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '2. Select Stuffed Crust Option:'),
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+              crusts.map(c => React.createElement('label', {
+                key: c.id,
+                style: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '4px', background: crust.id === c.id ? 'var(--primary-glow)' : 'var(--bg-panel)', border: crust.id === c.id ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }
+              },
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                  React.createElement('input', { type: 'radio', name: 'crust', checked: crust.id === c.id, onChange: () => setCrust(c) }),
+                  React.createElement('span', null, c.name)
+                ),
+                React.createElement('span', { style: { color: 'var(--accent)', fontWeight: 'bold' } }, c.price > 0 ? `+ Rs. ${c.price}` : 'Free')
+              ))
+            )
+          ) : null,
+          React.createElement('div', { style: { marginBottom: '20px' } },
+            React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '3. Extra Sauces & Dip Addons:'),
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+              availableAddons.map(addon => {
+                const isSelected = selectedAddons.some(a => a.id === addon.id);
+                return React.createElement('label', {
+                  key: addon.id,
+                  style: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '4px', background: isSelected ? 'var(--primary-glow)' : 'var(--bg-panel)', border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }
+                },
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    React.createElement('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleAddon(addon) }),
+                    React.createElement('span', null, addon.name)
+                  ),
+                  React.createElement('span', { style: { color: 'var(--accent)', fontWeight: 'bold' } }, `+ Rs. ${addon.price}`)
+                );
+              })
+            )
+          ),
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
+            React.createElement('span', { style: { fontWeight: 'bold' } }, 'Quantity:'),
+            React.createElement('div', { style: { display: 'inline-flex', alignItems: 'center', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: '4px' } },
+              React.createElement('button', { onClick: () => setQty(Math.max(1, qty - 1)), style: { padding: '6px 14px', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' } }, '-'),
+              React.createElement('span', { style: { padding: '0 12px', fontWeight: 'bold' } }, qty),
+              React.createElement('button', { onClick: () => setQty(qty + 1), style: { padding: '6px 14px', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' } }, '+')
+            )
+          )
+        ),
+        React.createElement('div', { style: { padding: '16px 20px', borderTop: '1px solid var(--border-light)', background: 'var(--bg-panel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+          React.createElement('div', null,
+            React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-muted)' } }, 'Net Item Total'),
+            React.createElement('div', { style: { fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${grandTotal.toLocaleString()}`)
+          ),
+          React.createElement('button', {
+            className: 'btn btn-primary',
+            onClick: () => {
+              addToCart({
+                id: item.id,
+                name: item.name,
+                price: unitPrice,
+                quantity: qty,
+                options: { size, crust: crust.id !== 'normal' ? crust : null, addons: selectedAddons }
+              });
+              onClose();
+            }
+          }, 'Add to Basket')
+        )
+      )
+    );
+  }
+
+  function FooterView({ setActivePage }) {
+    return React.createElement('footer', { id: 'global-footer' },
+      React.createElement('div', { className: 'footer-grid' },
+        React.createElement('div', { className: 'footer-col brand-col' },
+          React.createElement('h3', { className: 'footer-logo' }, React.createElement('span', { style: { color: 'var(--primary)' } }, 'Fiery '), 'Habibi Bites'),
+          React.createElement('p', { className: 'footer-desc' }, 'Serving premium fast food, authentic Pakistani handi and karahis, gourmet pizzas, crispy broasts, and cooling shakes in Gujranwala.')
+        ),
+        React.createElement('div', { className: 'footer-col' },
+          React.createElement('h4', null, 'Working Hours'),
+          React.createElement('ul', { className: 'footer-hours' },
+            React.createElement('li', null, React.createElement('span', null, 'Mon - Fri: '), React.createElement('span', null, '12:00 PM - 02:00 AM')),
+            React.createElement('li', null, React.createElement('span', null, 'Sat - Sun: '), React.createElement('span', null, '12:00 PM - 03:00 AM'))
+          )
+        ),
+        React.createElement('div', { className: 'footer-col' },
+          React.createElement('h4', null, 'Kitchen'),
+          React.createElement('ul', { className: 'footer-links' },
+            React.createElement('li', null, React.createElement('button', { onClick: () => setActivePage('menu'), style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' } }, 'Gourmet Pizzas')),
+            React.createElement('li', null, React.createElement('button', { onClick: () => setActivePage('deals'), style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' } }, 'Super Saver Deals'))
+          )
+        ),
+        React.createElement('div', { className: 'footer-col' },
+          React.createElement('h4', null, 'Find Us'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.85rem' } }, 'Main Boulevard, Qila Didar Singh, Gujranwala, Punjab, Pakistan.')
+        )
+      ),
+      React.createElement('div', { className: 'footer-bottom', style: { textAlign: 'center', padding: '15px 0', borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)', fontSize: '0.85rem' } },
+        '© Habibi Bites. All Rights Reserved. Enterprise React Edition.'
+      )
+    );
+  }
+
+  // Render to DOM
+  const root = document.getElementById('root');
+  if (root) {
+    ReactDOM.createRoot(root).render(React.createElement(HabibiBitesFullApp));
+  }
+})();
