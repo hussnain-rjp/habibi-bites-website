@@ -2689,3 +2689,23 @@ footer {
 .deal-card-image-box img:hover {
   transform: scale(1.05);
 }
+
+/* Performance & Lazy Loading Enhancements */
+img {
+  content-visibility: auto;
+}
+
+.menu-item-img, 
+.deal-card-image-box img,
+.hero-image-container img {
+  background: linear-gradient(110deg, #1e1e2d 8%, #2a2a3e 18%, #1e1e2d 33%);
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.5s infinite ease-in-out;
+  transition: opacity 0.3s ease-in-out;
+}
+
+@keyframes skeletonPulse {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+

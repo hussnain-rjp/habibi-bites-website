@@ -286,7 +286,7 @@
       React.createElement('header', { id: 'global-header' },
         React.createElement('div', { className: 'nav-container' },
           React.createElement('button', { onClick: () => setActivePage('home'), className: 'logo-wrapper', style: { background: 'none', border: 'none', cursor: 'pointer', padding: 0 } },
-            React.createElement('img', { src: '/assets/logo.png', alt: 'Habibi Bites Logo', className: 'logo-img', style: { height: '68px', borderRadius: '4px', border: '2px solid var(--primary)', background: '#000', boxShadow: 'var(--shadow-sm)' } })
+            React.createElement('img', { src: '/assets/logo.png', alt: 'Habibi Bites Logo', className: 'logo-img', loading: 'eager', decoding: 'async', style: { height: '68px', borderRadius: '4px', border: '2px solid var(--primary)', background: '#000', boxShadow: 'var(--shadow-sm)' } })
           ),
           React.createElement('nav', { className: `nav-links ${mobileNavOpen ? 'active' : ''}` },
             [
@@ -361,7 +361,7 @@
           React.createElement('div', { className: 'hero-image-wrapper' },
             React.createElement('div', { className: 'hero-image-glow' }),
             React.createElement('div', { className: 'hero-image-container', style: { position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' } },
-              React.createElement('img', { src: '/assets/logo.png', alt: 'Habibi Bites Logo', style: { width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'contain', borderRadius: '50%', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#fff', padding: '10px' } })
+              React.createElement('img', { src: '/assets/logo.png', alt: 'Habibi Bites Logo', loading: 'eager', decoding: 'async', style: { width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'contain', borderRadius: '50%', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#fff', padding: '10px' } })
             )
           )
         )
@@ -1676,10 +1676,12 @@
 
     return React.createElement('div', { className: 'menu-item-row', id: `item-${item.id}` },
       React.createElement('img', {
-        src: item.image || 'assets/hero_food_collage.png',
+        src: item.image || '/assets/hero_food_collage.png',
         className: 'menu-item-img',
         alt: item.name,
-        onError: (e) => { e.target.onerror = null; e.target.src = 'assets/hero_food_collage.png'; }
+        loading: 'lazy',
+        decoding: 'async',
+        onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
       }),
       React.createElement('div', { className: 'menu-item-info' },
         React.createElement('h3', null, item.name),
@@ -1700,7 +1702,7 @@
       deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
       React.createElement('div', { className: 'deal-card-image-box', style: { height: '190px', position: 'relative', overflow: 'hidden' } },
         React.createElement('img', {
-          src: deal.image || 'assets/hero_food_collage.png',
+          src: deal.image || '/assets/hero_food_collage.png',
           alt: deal.name,
           style: { width: '100%', height: '100%', objectFit: 'cover' },
           onError: (e) => { e.target.onerror = null; e.target.src = 'assets/hero_food_collage.png'; }
