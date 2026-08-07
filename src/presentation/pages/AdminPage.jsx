@@ -34,28 +34,30 @@ export const AdminPage = () => {
 
   useEffect(() => {
     if (isAdmin) {
-      loadDashboardData();
+      loadDashboardData(true);
     }
   }, [isAdmin]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (isInitial = false) => {
     const fetchedOrders = await db.getOrders();
     setOrders(fetchedOrders);
 
     const fetchedReviews = await db.getPendingReviews();
     setPendingReviews(fetchedReviews);
 
-    const s = await db.getDeliverySettings();
-    setDeliverySettings(s);
-    setSettingsFeeInput(s.fee);
-    setSettingsMaxInput(s.maxOrders);
-    setSettingsEnabledInput(s.enabled);
-
     const items = await db.getMenuItems();
     setMenuItemsList(items);
 
-    const disc = await db.getDiscountSettings();
-    setDiscountState(disc);
+    if (isInitial) {
+      const s = await db.getDeliverySettings();
+      setDeliverySettings(s);
+      setSettingsFeeInput(s.fee);
+      setSettingsMaxInput(s.maxOrders);
+      setSettingsEnabledInput(s.enabled);
+
+      const disc = await db.getDiscountSettings();
+      setDiscountState(disc);
+    }
   };
 
   const handleSaveDiscount = async (e) => {

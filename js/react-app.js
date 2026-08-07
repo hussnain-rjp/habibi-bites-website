@@ -1177,8 +1177,8 @@
 
     useEffect(() => {
       if (isAdmin) {
-        loadDashboard();
-        const handleStorageChange = () => loadDashboard();
+        loadDashboard(true);
+        const handleStorageChange = () => loadDashboard(false);
         window.addEventListener('storage_changed', handleStorageChange);
         window.addEventListener('storage', handleStorageChange);
         return () => {
@@ -1188,7 +1188,7 @@
       }
     }, [isAdmin, adminTab]);
 
-    const loadDashboard = async () => {
+    const loadDashboard = async (isInitial = false) => {
       const latestOrders = await repo.getOrders();
       setOrders(latestOrders);
 
@@ -1207,12 +1207,16 @@
 
       setPendingReviews(await repo.getPendingReviews());
       setMenuItems(await repo.getMenuItems());
-      const s = await repo.getDeliverySettings();
-      setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
-      const disc = await repo.getDiscountSettings();
-      setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
-      setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
-      setDiscItemId(disc.targetItemId || ''); setDiscLabel(disc.label || '');
+
+      if (isInitial) {
+        const s = await repo.getDeliverySettings();
+        setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
+        const disc = await repo.getDiscountSettings();
+        setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
+        setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
+        setDiscItemId(disc.targetItemId || ''); setDiscLabel(disc.label || '');
+      }
+
       // Load restaurant info
       const info = await repo.getRestaurantInfo();
       setRestName(info.name || 'Habibi Bites');
