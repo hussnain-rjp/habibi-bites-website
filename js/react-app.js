@@ -641,7 +641,7 @@
           ),
           React.createElement('div', { className: 'deals-grid' },
             (featured.length > 0 ? featured : deals.slice(0, 4)).map(deal =>
-              React.createElement(DealCardComponent, { key: deal.id, deal, addToCart })
+              React.createElement(DealCardComponent, { key: deal.id, deal, addToCart, discountRule })
             )
           )
         )
@@ -726,7 +726,7 @@
                 React.createElement('span', { className: 'badge badge-accent' }, `${catItems.length} Items`)
               ),
               React.createElement('div', { className: 'menu-items-list' },
-                catItems.map(item => React.createElement(FoodCardComponent, { key: item.id, item, addToCart, onCustomize }))
+                catItems.map(item => React.createElement(FoodCardComponent, { key: item.id, item, addToCart, onCustomize, discountRule }))
               )
             );
           })
@@ -775,7 +775,7 @@
         React.createElement('h1', { className: 'section-title' }, 'Habibi Exclusive Deals')
       ),
       React.createElement('div', { className: 'deals-grid' },
-        deals.map(deal => React.createElement(DealCardComponent, { key: deal.id, deal, addToCart }))
+        deals.map(deal => React.createElement(DealCardComponent, { key: deal.id, deal, addToCart, discountRule }))
       )
     );
   }
@@ -2132,7 +2132,7 @@
       React.createElement('div', { style: { marginTop: '26px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' } },
         React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '13px 20px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)' } },
           React.createElement('span', { style: { fontSize: '1.1rem' } }, '📍'),
-          React.createElement('span', { style: { fontWeight: '700', fontSize: '0.98rem' } }, 'Find Us on Google Maps'),
+                React.createElement('span', { style: { fontWeight: '700', fontSize: '0.98rem' } }, 'Find Us on Google Maps'),
           React.createElement('span', { style: { color: 'var(--text-muted)', fontSize: '0.8rem' } }, '— Qila Didar Singh, Gujranwala'),
           React.createElement('a', {
             href: 'https://maps.google.com/?q=Qila+Didar+Singh+Gujranwala+Pakistan',
@@ -2156,13 +2156,31 @@
 
   // --- HELPER CARD & MODAL COMPONENTS ---
 
-  function FoodCardComponent({ item, addToCart, onCustomize }) {
+  function FoodCardComponent({ item, addToCart, onCustomize, discountRule }) {
+    let rawPrice = item.prices ? (Object.keys(item.prices).length === 1 ? Object.values(item.prices)[0] : Math.min(...Object.values(item.prices))) : 0;
+    let hasMultiple = item.prices && Object.keys(item.prices).length > 1;
+
+    let discountAmount = 0;
+    if (discountRule && discountRule.enabled && rawPrice > 0) {
+      if (discountRule.targetType === 'all' ||
+         (discountRule.targetType === 'category' && discountRule.targetCategory === item.category) ||
+         (discountRule.targetType === 'item' && String(discountRule.targetItemId) === String(item.id))) {
+        const val = parseFloat(discountRule.value) || 0;
+        discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
+      }
+    }
+    const finalPrice = Math.max(0, rawPrice - discountAmount);
+
     let priceDisplay = "";
-    let hasMultiple = false;
-    if (item.prices) {
-      const keys = Object.keys(item.prices);
-      if (keys.length === 1) priceDisplay = `Rs. ${item.prices[keys[0]]}`;
-      else { hasMultiple = true; priceDisplay = `From Rs. ${Math.min(...Object.values(item.prices))}`; }
+    if (hasMultiple) {
+      priceDisplay = `From Rs. ${finalPrice.toLocaleString()}`;
+    } else if (discountAmount > 0) {
+      priceDisplay = React.createElement('span', null,
+        React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginRight: '6px' } }, `Rs. ${rawPrice}`),
+        React.createElement('span', { style: { color: '#4ade80', fontWeight: 'bold' } }, `Rs. ${finalPrice}`)
+      );
+    } else {
+      priceDisplay = `Rs. ${rawPrice}`;
     }
 
     return React.createElement('div', { className: 'menu-item-row', id: `item-${item.id}` },
@@ -2182,13 +2200,21 @@
         React.createElement('div', { className: 'menu-item-main-price', style: { fontWeight: 'bold', color: 'var(--accent)' } }, priceDisplay),
         React.createElement('button', {
           className: 'btn btn-primary',
-          onClick: () => (hasMultiple || item.category === 'pizza' || item.category === 'special_pizza') ? onCustomize(item) : addToCart({ id: item.id, name: item.name, price: item.prices ? Object.values(item.prices)[0] : 0 })
+          onClick: () => (hasMultiple || item.category === 'pizza' || item.category === 'special_pizza') ? onCustomize(item) : addToCart({ id: item.id, name: item.name, price: finalPrice })
         }, hasMultiple ? "Choose Options" : "Add to Basket")
       )
     );
   }
 
-  function DealCardComponent({ deal, addToCart }) {
+  function DealCardComponent({ deal, addToCart, discountRule }) {
+    let rawPrice = deal.price || 0;
+    let discountAmount = 0;
+    if (discountRule && discountRule.enabled && rawPrice > 0 && discountRule.targetType === 'all') {
+      const val = parseFloat(discountRule.value) || 0;
+      discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
+    }
+    const finalPrice = Math.max(0, rawPrice - discountAmount);
+
     return React.createElement('div', { className: 'deal-card', id: `deal-${deal.id}` },
       deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
       React.createElement('div', { className: 'deal-card-image-box', style: { height: '190px', position: 'relative', overflow: 'hidden' } },
@@ -2198,11 +2224,6 @@
           style: { width: '100%', height: '100%', objectFit: 'cover' },
           onError: (e) => { e.target.onerror = null; e.target.src = 'assets/hero_food_collage.png'; }
         }),
-        React.createElement('div', { className: 'deal-flyer-glow-ribbon', style: { position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)' } })
-      ),
-      React.createElement('div', { className: 'deal-card-body' },
-        React.createElement('h3', { className: 'deal-card-title' }, deal.name),
-        React.createElement('p', { className: 'deal-card-contents', style: { color: 'var(--text-muted)', fontSize: '0.9rem' } }, deal.contents),
         React.createElement('div', { className: 'deal-card-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
           React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${deal.price}`),
           React.createElement('button', { className: 'btn btn-primary', onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: deal.price }) }, 'Add to Basket +')

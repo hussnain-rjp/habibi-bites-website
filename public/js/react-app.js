@@ -641,7 +641,7 @@
           ),
           React.createElement('div', { className: 'deals-grid' },
             (featured.length > 0 ? featured : deals.slice(0, 4)).map(deal =>
-              React.createElement(DealCardComponent, { key: deal.id, deal, addToCart })
+              React.createElement(DealCardComponent, { key: deal.id, deal, addToCart, discountRule })
             )
           )
         )
@@ -726,7 +726,7 @@
                 React.createElement('span', { className: 'badge badge-accent' }, `${catItems.length} Items`)
               ),
               React.createElement('div', { className: 'menu-items-list' },
-                catItems.map(item => React.createElement(FoodCardComponent, { key: item.id, item, addToCart, onCustomize }))
+                catItems.map(item => React.createElement(FoodCardComponent, { key: item.id, item, addToCart, onCustomize, discountRule }))
               )
             );
           })
@@ -775,7 +775,7 @@
         React.createElement('h1', { className: 'section-title' }, 'Habibi Exclusive Deals')
       ),
       React.createElement('div', { className: 'deals-grid' },
-        deals.map(deal => React.createElement(DealCardComponent, { key: deal.id, deal, addToCart }))
+        deals.map(deal => React.createElement(DealCardComponent, { key: deal.id, deal, addToCart, discountRule }))
       )
     );
   }
@@ -2156,61 +2156,90 @@
 
 // --- HELPER CARD & MODAL COMPONENTS ---
 
-function FoodCardComponent({ item, addToCart, onCustomize }) {
-let priceDisplay = "";
-let hasMultiple = false;
-if (item.prices) {
-  const keys = Object.keys(item.prices);
-  if (keys.length === 1) priceDisplay = `Rs. ${item.prices[keys[0]]}`;
-  else { hasMultiple = true; priceDisplay = `From Rs. ${Math.min(...Object.values(item.prices))}`; }
-}
+function FoodCardComponent({ item, addToCart, onCustomize, discountRule }) {
+  let rawPrice = item.prices ? (Object.keys(item.prices).length === 1 ? Object.values(item.prices)[0] : Math.min(...Object.values(item.prices))) : 0;
+  let hasMultiple = item.prices && Object.keys(item.prices).length > 1;
 
-return React.createElement('div', { className: 'menu-item-row', id: `item-${item.id}` },
-  React.createElement('img', {
-    src: item.image || '/assets/hero_food_collage.png',
-    className: 'menu-item-img',
-    alt: item.name,
-    loading: 'lazy',
-    decoding: 'async',
-    onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
-  }),
-  React.createElement('div', { className: 'menu-item-info' },
-    React.createElement('h3', null, item.name),
-    React.createElement('p', { className: 'menu-item-description' }, item.description)
-  ),
-  React.createElement('div', { className: 'menu-item-cta' },
-    React.createElement('div', { className: 'menu-item-main-price', style: { fontWeight: 'bold', color: 'var(--accent)' } }, priceDisplay),
-    React.createElement('button', {
-      className: 'btn btn-primary',
-      onClick: () => (hasMultiple || item.category === 'pizza' || item.category === 'special_pizza') ? onCustomize(item) : addToCart({ id: item.id, name: item.name, price: item.prices ? Object.values(item.prices)[0] : 0 })
-    }, hasMultiple ? "Choose Options" : "Add to Basket")
-  )
-);
-}
+  let discountAmount = 0;
+  if (discountRule && discountRule.enabled && rawPrice > 0) {
+    if (discountRule.targetType === 'all' ||
+       (discountRule.targetType === 'category' && discountRule.targetCategory === item.category) ||
+       (discountRule.targetType === 'item' && String(discountRule.targetItemId) === String(item.id))) {
+      const val = parseFloat(discountRule.value) || 0;
+      discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
+    }
+  }
+  const finalPrice = Math.max(0, rawPrice - discountAmount);
 
-function DealCardComponent({ deal, addToCart }) {
-return React.createElement('div', { className: 'deal-card', id: `deal-${deal.id}` },
-  deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
-  React.createElement('div', { className: 'deal-card-image-box', style: { height: '190px', position: 'relative', overflow: 'hidden' } },
+  let priceDisplay = "";
+  if (hasMultiple) {
+    priceDisplay = `From Rs. ${finalPrice.toLocaleString()}`;
+  } else if (discountAmount > 0) {
+    priceDisplay = React.createElement('span', null,
+      React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginRight: '6px' } }, `Rs. ${rawPrice}`),
+      React.createElement('span', { style: { color: '#4ade80', fontWeight: 'bold' } }, `Rs. ${finalPrice}`)
+    );
+  } else {
+    priceDisplay = `Rs. ${rawPrice}`;
+  }
+
+  return React.createElement('div', { className: 'menu-item-row', id: `item-${item.id}` },
     React.createElement('img', {
-      src: deal.image || '/assets/hero_food_collage.png',
-      alt: deal.name,
+      src: item.image || '/assets/hero_food_collage.png',
+      className: 'menu-item-img',
+      alt: item.name,
       loading: 'lazy',
       decoding: 'async',
-      style: { width: '100%', height: '100%', objectFit: 'cover' },
       onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
     }),
-    React.createElement('div', { className: 'deal-flyer-glow-ribbon', style: { position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)' } })
-  ),
-  React.createElement('div', { className: 'deal-card-body' },
-    React.createElement('h3', { className: 'deal-card-title' }, deal.name),
-    React.createElement('p', { className: 'deal-card-contents', style: { color: 'var(--text-muted)', fontSize: '0.9rem' } }, deal.contents),
-    React.createElement('div', { className: 'deal-card-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
-      React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${deal.price}`),
-      React.createElement('button', { className: 'btn btn-primary', onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: deal.price }) }, 'Add to Basket +')
+    React.createElement('div', { className: 'menu-item-info' },
+      React.createElement('h3', null, item.name),
+      React.createElement('p', { className: 'menu-item-description' }, item.description)
+    ),
+    React.createElement('div', { className: 'menu-item-cta' },
+      React.createElement('div', { className: 'menu-item-main-price', style: { fontWeight: 'bold', color: 'var(--accent)' } }, priceDisplay),
+      React.createElement('button', {
+        className: 'btn btn-primary',
+        onClick: () => (hasMultiple || item.category === 'pizza' || item.category === 'special_pizza') ? onCustomize(item) : addToCart({ id: item.id, name: item.name, price: finalPrice })
+      }, hasMultiple ? "Choose Options" : "Add to Basket")
     )
-  )
-);
+  );
+}
+
+function DealCardComponent({ deal, addToCart, discountRule }) {
+  let rawPrice = deal.price || 0;
+  let discountAmount = 0;
+  if (discountRule && discountRule.enabled && rawPrice > 0 && discountRule.targetType === 'all') {
+    const val = parseFloat(discountRule.value) || 0;
+    discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
+  }
+  const finalPrice = Math.max(0, rawPrice - discountAmount);
+
+  return React.createElement('div', { className: 'deal-card', id: `deal-${deal.id}` },
+    deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
+    React.createElement('div', { className: 'deal-card-image-box', style: { height: '190px', position: 'relative', overflow: 'hidden' } },
+      React.createElement('img', {
+        src: deal.image || '/assets/hero_food_collage.png',
+        alt: deal.name,
+        loading: 'lazy',
+        decoding: 'async',
+        style: { width: '100%', height: '100%', objectFit: 'cover' },
+        onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
+      }),
+      React.createElement('div', { className: 'deal-flyer-glow-ribbon', style: { position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)' } })
+    ),
+    React.createElement('div', { className: 'deal-card-body', style: { padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' } },
+      React.createElement('h3', { className: 'deal-card-title' }, deal.name),
+      React.createElement('p', { className: 'deal-card-contents', style: { color: 'var(--text-muted)', fontSize: '0.9rem' } }, deal.contents),
+      React.createElement('div', { className: 'deal-card-footer', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
+        discountAmount > 0 ? React.createElement('div', null,
+          React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginRight: '6px' } }, `Rs. ${rawPrice}`),
+          React.createElement('span', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: '#4ade80' } }, `Rs. ${finalPrice}`)
+        ) : React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${rawPrice}`),
+        React.createElement('button', { className: 'btn btn-primary', onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: finalPrice }) }, 'Add to Basket +')
+      )
+    )
+  );
 }
 
 function CartDrawerModal({ cart, cartSubtotal, updateQuantity, removeFromCart, onClose, setActivePage }) {
