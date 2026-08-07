@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useDb } from '../contexts/DbContext.jsx';
+import { RateLimitError } from '../../infrastructure/rateLimiting/RateLimiter.js';
+import { validateForm } from '../../core/validation/Validator.js';
+import { sanitizeError } from '../../core/errors/ErrorHandler.js';
 
 export const ReviewsPage = () => {
   const db = useDb();
@@ -9,6 +12,8 @@ export const ReviewsPage = () => {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     loadReviews();
@@ -22,15 +27,34 @@ export const ReviewsPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim() || !comment.trim()) return;
+    setReviewError('');
+    setFieldErrors({});
 
-    await db.addReview(name.trim(), rating, comment.trim());
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setShowModal(false);
-      setName('');
-      setComment('');
-    }, 2000);
+    // ── Client-side schema validation ──
+    const { valid, errors } = validateForm(
+      { name: 'reviewName', rating: 'reviewRating', comment: 'reviewComment' },
+      { name: name.trim(), rating: Number(rating), comment: comment.trim() },
+      { name: 'Your Name', rating: 'Star Rating', comment: 'Your Comment' }
+    );
+    if (!valid) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    try {
+      await db.addReview(name.trim(), rating, comment.trim());
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        setShowModal(false);
+        setName('');
+        setComment('');
+        setReviewError('');
+        setFieldErrors({});
+      }, 2000);
+    } catch (err) {
+      setReviewError(sanitizeError(err, 'Could not submit review. Please try again.'));
+    }
   };
 
   return (
@@ -73,17 +97,22 @@ export const ReviewsPage = () => {
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Your review has been submitted for moderation.</p>
               </div>
             ) : (
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate>
+                {reviewError && (
+                  <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(239,68,68,0.12)', border: '1px solid #ef4444', color: '#fca5a5', marginBottom: '14px', fontSize: '0.88rem', fontWeight: 600 }}>
+                    {reviewError}
+                  </div>
+                )}
                 <div style={{ marginBottom: '14px' }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '4px' }}>Your Name *</label>
-                  <input 
-                    type="text" 
-                    required 
+                  <input
+                    type="text"
                     placeholder="e.g. Hamza Malik"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                    onChange={(e) => { setName(e.target.value); setFieldErrors(p => ({ ...p, name: undefined })); }}
+                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: `1px solid ${fieldErrors.name ? '#ef4444' : 'var(--border)'}`, color: 'var(--text-main)' }}
                   />
+                  {fieldErrors.name && <span style={{ color: '#fca5a5', fontSize: '0.78rem', fontWeight: 600, display: 'block', marginTop: '3px' }}>⚠ {fieldErrors.name}</span>}
                 </div>
 
                 <div style={{ marginBottom: '14px' }}>
@@ -103,14 +132,14 @@ export const ReviewsPage = () => {
 
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '4px' }}>Your Experience / Comments *</label>
-                  <textarea 
-                    required 
+                  <textarea
                     rows="4"
                     placeholder="Tell us about the food crunch, taste, delivery speed..."
                     value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                    onChange={(e) => { setComment(e.target.value); setFieldErrors(p => ({ ...p, comment: undefined })); }}
+                    style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: `1px solid ${fieldErrors.comment ? '#ef4444' : 'var(--border)'}`, color: 'var(--text-main)' }}
                   />
+                  {fieldErrors.comment && <span style={{ color: '#fca5a5', fontSize: '0.78rem', fontWeight: 600, display: 'block', marginTop: '3px' }}>⚠ {fieldErrors.comment}</span>}
                 </div>
 
                 <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>

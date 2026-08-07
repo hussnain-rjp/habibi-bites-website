@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDb } from '../contexts/DbContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { InvoiceFactory } from '../../core/factories/InvoiceFactory.js';
+import { RateLimitError } from '../../infrastructure/rateLimiting/RateLimiter.js';
+import { sanitizeError } from '../../core/errors/ErrorHandler.js';
 
 export const AdminPage = () => {
   const db = useDb();
@@ -11,6 +13,8 @@ export const AdminPage = () => {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [backoffSec, setBackoffSec] = useState(0);   // seconds remaining in backoff
+  const backoffTimer = useRef(null);
 
   const [orders, setOrders] = useState([]);
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -39,15 +43,37 @@ export const AdminPage = () => {
     setSettingsEnabledInput(s.enabled);
   };
 
+  // Start a visible countdown when rate limited
+  const startBackoffCountdown = (waitMs) => {
+    if (backoffTimer.current) clearInterval(backoffTimer.current);
+    const endTime = Date.now() + waitMs;
+    setBackoffSec(Math.ceil(waitMs / 1000));
+    backoffTimer.current = setInterval(() => {
+      const remaining = Math.ceil((endTime - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(backoffTimer.current);
+        setBackoffSec(0);
+      } else {
+        setBackoffSec(remaining);
+      }
+    }, 1000);
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    if (backoffSec > 0) return; // blocked — button is disabled but guard anyway
     setAuthError('');
     setAuthLoading(true);
     try {
       const success = await login(username, password);
       if (!success) setAuthError('Invalid credentials.');
     } catch (err) {
-      setAuthError(err.message || 'Login failed.');
+      if (err instanceof RateLimitError) {
+        setAuthError(err.message);
+        startBackoffCountdown(err.waitMs);
+      } else {
+        setAuthError(sanitizeError(err, 'Login failed. Please verify your credentials.'));
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -109,6 +135,15 @@ export const AdminPage = () => {
             </div>
           )}
 
+          {backoffSec > 0 && (
+            <div style={{ padding: '14px 16px', borderRadius: '8px', background: 'rgba(245, 166, 35, 0.12)', border: '1px solid rgba(245, 166, 35, 0.4)', color: 'var(--accent)', marginBottom: '20px', fontSize: '0.9rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.8rem', marginBottom: '4px' }}>⏳</div>
+              <strong>Please wait before trying again</strong>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, margin: '6px 0' }}>{backoffSec}s</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Login will unlock automatically</div>
+            </div>
+          )}
+
           <form onSubmit={handleLoginSubmit}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-main)' }}>Username / Email</label>
@@ -132,8 +167,13 @@ export const AdminPage = () => {
                 style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
               />
             </div>
-            <button type="submit" className="btn btn-primary" disabled={authLoading} style={{ width: '100%', padding: '14px', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, borderRadius: '8px' }}>
-              {authLoading ? 'Signing In...' : 'Open Kitchen Panel ➔'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={authLoading || backoffSec > 0}
+              style={{ width: '100%', padding: '14px', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, borderRadius: '8px', opacity: (authLoading || backoffSec > 0) ? 0.5 : 1, cursor: (authLoading || backoffSec > 0) ? 'not-allowed' : 'pointer' }}
+            >
+              {authLoading ? 'Signing In...' : backoffSec > 0 ? `Locked — try in ${backoffSec}s` : 'Open Kitchen Panel ➔'}
             </button>
           </form>
         </div>

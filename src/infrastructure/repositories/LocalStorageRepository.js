@@ -215,7 +215,10 @@ export class LocalStorageRepository extends IRepository {
 
   // Auth
   async loginAdmin(username, password) {
-    if (username === "admin" && password === "habibibites123") {
+    const localUser = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_LOCAL_ADMIN_USER) || 'admin';
+    const localPass = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_LOCAL_ADMIN_PASSWORD) || '';
+
+    if (localPass && username === localUser && password === localPass) {
       writeStore(DB_KEYS.ADMIN, { username, loginTime: Date.now() });
       return true;
     }

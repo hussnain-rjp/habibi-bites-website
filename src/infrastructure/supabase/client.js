@@ -1,13 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Configuration: Credentials configured for Habibi Bites project
+// Configuration: Credentials loaded strictly from environment variables
 const SUPABASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SUPABASE_URL)
   ? import.meta.env.VITE_SUPABASE_URL
-  : "https://wgsssibktygkwyicdtlr.supabase.co";
+  : (typeof window !== 'undefined' && window.VITE_SUPABASE_URL ? window.VITE_SUPABASE_URL : '');
 
 const SUPABASE_KEY = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SUPABASE_ANON_KEY)
   ? import.meta.env.VITE_SUPABASE_ANON_KEY
-  : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indnc3NzaWJrdHlna3d5aWNkdGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxMjEwNDYsImV4cCI6MjEwMTY5NzA0Nn0.EYAek-TmMZ_oE1t9jRdcZjlfcNC3e77rTPMGh0jgFRo";
+  : (typeof window !== 'undefined' && window.VITE_SUPABASE_ANON_KEY ? window.VITE_SUPABASE_ANON_KEY : '');
 
 let client = null;
 

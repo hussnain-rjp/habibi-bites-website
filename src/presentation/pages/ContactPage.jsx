@@ -1,10 +1,58 @@
 import React, { useState } from 'react';
+import { validateForm } from '../../core/validation/Validator.js';
+
+const errStyle = {
+  color: '#fca5a5',
+  fontSize: '0.78rem',
+  fontWeight: 600,
+  display: 'block',
+  marginTop: '3px',
+};
+
+const inputStyle = (hasError) => ({
+  width: '100%',
+  padding: '10px',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--bg-elevated)',
+  border: `1px solid ${hasError ? '#ef4444' : 'var(--border)'}`,
+  color: 'var(--text-main)',
+});
 
 export const ContactPage = () => {
   const [submitted, setSubmitted] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactContact, setContactContact] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setFieldErrors({});
+
+    // ── Strict schema validation ────────────────────────────────────────────
+    const { valid, errors } = validateForm(
+      {
+        contactName: 'contactName',
+        contactContact: 'contactContact',
+        contactMessage: 'contactMessage',
+      },
+      {
+        contactName: contactName.trim(),
+        contactContact: contactContact.trim(),
+        contactMessage: contactMessage.trim(),
+      },
+      {
+        contactName: 'Your Name',
+        contactContact: 'Phone / Email',
+        contactMessage: 'Message',
+      }
+    );
+
+    if (!valid) {
+      setFieldErrors(errors);
+      return; // reject — don't submit
+    }
+
     setSubmitted(true);
   };
 
@@ -56,35 +104,41 @@ export const ContactPage = () => {
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Thank you for contacting Habibi Bites. We will reply shortly.</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '4px' }}>Your Name *</label>
-                <input 
-                  type="text" 
-                  required 
+                <input
+                  type="text"
                   placeholder="e.g. Hamza Malik"
-                  style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                  value={contactName}
+                  onChange={(e) => { setContactName(e.target.value); setFieldErrors(p => ({ ...p, contactName: undefined })); }}
+                  style={inputStyle(!!fieldErrors.contactName)}
                 />
+                {fieldErrors.contactName && <span style={errStyle}>⚠ {fieldErrors.contactName}</span>}
               </div>
 
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '4px' }}>Phone / Email *</label>
-                <input 
-                  type="text" 
-                  required 
+                <input
+                  type="text"
                   placeholder="03001234567 or email@domain.com"
-                  style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                  value={contactContact}
+                  onChange={(e) => { setContactContact(e.target.value); setFieldErrors(p => ({ ...p, contactContact: undefined })); }}
+                  style={inputStyle(!!fieldErrors.contactContact)}
                 />
+                {fieldErrors.contactContact && <span style={errStyle}>⚠ {fieldErrors.contactContact}</span>}
               </div>
 
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '4px' }}>Message *</label>
-                <textarea 
-                  required 
+                <textarea
                   rows="4"
                   placeholder="How can we assist you today?"
-                  style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                  value={contactMessage}
+                  onChange={(e) => { setContactMessage(e.target.value); setFieldErrors(p => ({ ...p, contactMessage: undefined })); }}
+                  style={{ ...inputStyle(!!fieldErrors.contactMessage), resize: 'vertical' }}
                 />
+                {fieldErrors.contactMessage && <span style={errStyle}>⚠ {fieldErrors.contactMessage}</span>}
               </div>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>

@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useDb } from '../contexts/DbContext.jsx';
+import { validateForm } from '../../core/validation/Validator.js';
+import { RateLimitError } from '../../infrastructure/rateLimiting/RateLimiter.js';
+import { sanitizeError } from '../../core/errors/ErrorHandler.js';
+
+// Shared inline-error style
+const errStyle = {
+  color: '#fca5a5',
+  fontSize: '0.8rem',
+  marginTop: '4px',
+  fontWeight: 600,
+  display: 'block',
+};
+
+// Input border helper — highlights invalid field
+const inputStyle = (hasError) => ({
+  width: '100%',
+  padding: '12px',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--bg-elevated)',
+  border: `1px solid ${hasError ? '#ef4444' : 'var(--border)'}`,
+  color: 'var(--text-main)',
+  outline: hasError ? '1px solid #ef4444' : 'none',
+});
 
 export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
   const { cartItems, cartSubtotal, clearCart } = useCart();
@@ -12,6 +35,7 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
   const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150 });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({}); // per-field inline errors
 
   useEffect(() => {
     loadSettings();
@@ -28,14 +52,23 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setFieldErrors({});
 
     if (cartItems.length === 0) {
       setErrorMsg('Your basket is empty. Please add items to order.');
       return;
     }
-    if (!name.trim() || !phone.trim() || !address.trim()) {
-      setErrorMsg('Please fill in all required customer details.');
-      return;
+
+    // ── Client-side schema validation ──────────────────────────────────────
+    const { valid, errors } = validateForm(
+      { name: 'customerName', phone: 'phone', address: 'address' },
+      { name: name.trim(), phone: phone.trim(), address: address.trim() },
+      { name: 'Customer Name', phone: 'Phone Number', address: 'Delivery Address' }
+    );
+
+    if (!valid) {
+      setFieldErrors(errors);
+      return; // reject — don't touch Supabase
     }
 
     setLoading(true);
@@ -46,7 +79,7 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
       if (setSelectedOrderId) setSelectedOrderId(order.id);
       setActivePage('tracker');
     } catch (err) {
-      setErrorMsg(err.message || 'Error processing your order. Please try again.');
+      setErrorMsg(sanitizeError(err, 'Error processing your order. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -72,45 +105,45 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '6px' }}>Full Name *</label>
-              <input 
-                type="text" 
-                required 
+              <input
+                type="text"
                 placeholder="e.g. Zahid Mehmood"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                onChange={(e) => { setName(e.target.value); setFieldErrors(prev => ({ ...prev, name: undefined })); }}
+                style={inputStyle(!!fieldErrors.name)}
               />
+              {fieldErrors.name && <span style={errStyle}>⚠ {fieldErrors.name}</span>}
             </div>
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '6px' }}>Mobile Phone Number *</label>
-              <input 
-                type="tel" 
-                required 
+              <input
+                type="tel"
                 placeholder="0300-1234567"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                onChange={(e) => { setPhone(e.target.value); setFieldErrors(prev => ({ ...prev, phone: undefined })); }}
+                style={inputStyle(!!fieldErrors.phone)}
               />
+              {fieldErrors.phone && <span style={errStyle}>⚠ {fieldErrors.phone}</span>}
             </div>
 
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '6px' }}>Delivery Address *</label>
-              <textarea 
-                required 
+              <textarea
                 rows="3"
                 placeholder="House #, Street #, Sector/Area, City"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)', resize: 'vertical' }}
+                onChange={(e) => { setAddress(e.target.value); setFieldErrors(prev => ({ ...prev, address: undefined })); }}
+                style={{ ...inputStyle(!!fieldErrors.address), resize: 'vertical' }}
               />
+              {fieldErrors.address && <span style={errStyle}>⚠ {fieldErrors.address}</span>}
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="btn btn-primary"
               disabled={loading || cartItems.length === 0}
               style={{ width: '100%', padding: '14px', fontSize: '1rem', justifyContent: 'center' }}
