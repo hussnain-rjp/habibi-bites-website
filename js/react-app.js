@@ -1073,7 +1073,14 @@
     if (!isAdmin) {
       return React.createElement('main', { className: 'section-container page-top-margin admin-page' },
         React.createElement('div', { style: { maxWidth: '400px', margin: '40px auto', background: 'var(--bg-panel)', padding: '30px', borderRadius: '8px', border: '1px solid var(--border)' } },
-          React.createElement('h2', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Admin Portal Login'),
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' } },
+            React.createElement('h2', { style: { color: 'var(--accent)', margin: 0 } }, 'Admin Portal Login'),
+            React.createElement('button', {
+              className: soundEnabled ? 'btn btn-primary' : 'btn btn-outline',
+              onClick: toggleSound,
+              style: { cursor: 'pointer', padding: '6px 12px', fontSize: '0.8rem' }
+            }, soundEnabled ? '🔔 Sound ON' : '🔕 Sound OFF')
+          ),
           React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); const s = await repo.loginAdmin(u, p); setIsAdmin(s); } },
             React.createElement('input', { value: u, onChange: e => setU(e.target.value), placeholder: 'Username', style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
             React.createElement('input', { type: 'password', value: p, onChange: e => setP(e.target.value), placeholder: 'Password', style: { width: '100%', padding: '10px', marginBottom: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
@@ -1145,7 +1152,14 @@
 
       // TAB 1: LIVE ORDERS QUEUE
       adminTab === 'orders' ? React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
-        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Live Orders Feed'),
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', margin: 0 } }, '⚡ Live Orders Feed'),
+          React.createElement('button', {
+            className: soundEnabled ? 'btn btn-primary' : 'btn btn-outline',
+            onClick: toggleSound,
+            style: { cursor: 'pointer', padding: '8px 16px', fontSize: '0.9rem', fontWeight: 'bold' }
+          }, soundEnabled ? '🔔 Order Audio Alerts ON' : '🔕 Order Audio Alerts OFF')
+        ),
         React.createElement('div', { style: { overflowX: 'auto' } },
           React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' } },
             React.createElement('thead', null,
