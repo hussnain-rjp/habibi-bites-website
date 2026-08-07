@@ -34,6 +34,15 @@ export const ContactPage = () => {
             <h3 style={{ color: 'var(--accent)', marginTop: 0 }}>⏰ Kitchen Operating Hours</h3>
             <p style={{ color: 'var(--text-muted)', margin: 0 }}>Mon - Fri: 12:00 PM - 02:00 AM<br/>Sat - Sun: 12:00 PM - 03:00 AM</p>
           </div>
+
+          <div style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+            <h3 style={{ color: 'var(--accent)', marginTop: 0 }}>📱 Follow Us on Social Media</h3>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <a href="https://www.facebook.com/share/195qQ7gAJp/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-main)', background: '#1877f2', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold' }}>Facebook</a>
+              <a href="https://www.instagram.com/habibi_bites_qds?igsh=ZDEyNDFqY2JhMmIx" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-main)', background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold' }}>Instagram</a>
+              <a href="https://www.tiktok.com/@habibi_qila?_r=1&_t=ZS-98gtpRf8j8q" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-main)', background: '#000', border: '1px solid var(--border-light)', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold' }}>TikTok</a>
+            </div>
+          </div>
         </div>
 
         {/* Contact Form */}

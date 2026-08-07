@@ -105,6 +105,20 @@ button, input, textarea, select {
   background: var(--primary);
 }
 
+/* --- Section Dividers --- */
+.section-divider {
+  width: 90%;
+  max-width: 1200px;
+  height: 1px;
+  margin: 50px auto;
+  border: none;
+  background: linear-gradient(90deg, transparent 0%, rgba(245, 166, 35, 0.3) 30%, rgba(255, 255, 255, 0.25) 50%, rgba(245, 166, 35, 0.3) 70%, transparent 100%);
+}
+
+section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
 /* --- Reusable Components (Buttons, Badges) --- */
 .btn {
   display: inline-flex;

@@ -7,7 +7,7 @@ export const AdminPage = () => {
   const db = useDb();
   const { isAdmin, login, logout } = useAuth();
 
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -45,7 +45,7 @@ export const AdminPage = () => {
     setAuthLoading(true);
     try {
       const success = await login(username, password);
-      if (!success) setAuthError('Invalid credentials. Default: admin / habibibites123');
+      if (!success) setAuthError('Invalid credentials.');
     } catch (err) {
       setAuthError(err.message || 'Login failed.');
     } finally {
@@ -94,43 +94,46 @@ export const AdminPage = () => {
   if (!isAdmin) {
     return (
       <main className="section-container page-top-margin">
-        <div style={{ maxWidth: '420px', margin: '40px auto', background: 'var(--bg-panel)', padding: '30px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)' }}>
-          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-            <span style={{ fontSize: '3rem' }}>🔐</span>
-            <h2 style={{ margin: '10px 0 0 0', color: 'var(--accent)' }}>Admin Portal</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Login to access kitchen orders & management.</p>
+        <div style={{ maxWidth: '440px', margin: '50px auto', background: 'var(--bg-panel)', padding: '36px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{ width: '70px', height: '70px', margin: '0 auto 12px auto', borderRadius: '50%', background: 'rgba(217,164,65,0.15)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.2rem' }}>
+              🔐
+            </div>
+            <h2 style={{ margin: '8px 0 4px 0', color: 'var(--accent)', fontSize: '1.6rem', fontWeight: 800 }}>Store Manager Login</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>Enter your admin password to open kitchen control panel.</p>
           </div>
 
           {authError && (
-            <div style={{ padding: '10px', borderRadius: 'var(--radius-sm)', background: 'rgba(217, 83, 79, 0.2)', border: '1px solid var(--primary)', color: '#ff6b6b', marginBottom: '15px', fontSize: '0.85rem' }}>
+            <div style={{ padding: '12px 16px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#fca5a5', marginBottom: '20px', fontSize: '0.9rem', fontWeight: 600 }}>
               ⚠️ {authError}
             </div>
           )}
 
           <form onSubmit={handleLoginSubmit}>
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '4px' }}>Username / Email</label>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-main)' }}>Username / Email</label>
               <input 
                 type="text" 
                 required 
+                placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
               />
             </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '4px' }}>Password</label>
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-main)' }}>Password</label>
               <input 
                 type="password" 
                 required 
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={{ width: '100%', padding: '10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
               />
             </div>
-            <button type="submit" className="btn btn-primary" disabled={authLoading} style={{ width: '100%', padding: '12px', justifyContent: 'center' }}>
-              {authLoading ? 'Authenticating...' : 'Login to Portal ➔'}
+            <button type="submit" className="btn btn-primary" disabled={authLoading} style={{ width: '100%', padding: '14px', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, borderRadius: '8px' }}>
+              {authLoading ? 'Signing In...' : 'Open Kitchen Panel ➔'}
             </button>
           </form>
         </div>
@@ -138,153 +141,257 @@ export const AdminPage = () => {
     );
   }
 
+  // Color helper for order status badges
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'received': return { bg: '#0284c7', color: '#fff', label: '📋 Order Received' };
+      case 'queue': return { bg: '#6366f1', color: '#fff', label: '⏳ In Queue' };
+      case 'cooking': return { bg: '#d97706', color: '#fff', label: '👨‍🍳 Cooking in Kitchen' };
+      case 'packing': return { bg: '#8b5cf6', color: '#fff', label: '📦 Packing Order' };
+      case 'delivery': return { bg: '#0284c7', color: '#fff', label: '🛵 Out for Delivery' };
+      case 'delivered': return { bg: '#16a34a', color: '#fff', label: '✅ Delivered' };
+      case 'cancelled': return { bg: '#dc2626', color: '#fff', label: '❌ Cancelled' };
+      default: return { bg: '#4b5563', color: '#fff', label: status };
+    }
+  };
+
   return (
     <main className="section-container page-top-margin">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px', marginBottom: '30px' }}>
+      {/* Top Header Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px', marginBottom: '25px', background: 'var(--bg-panel)', padding: '20px 24px', borderRadius: '12px', border: '1px solid var(--border)' }}>
         <div>
-          <span className="section-subtitle">Habibi Kitchen Controller</span>
-          <h1 className="section-title" style={{ margin: 0 }}>Admin Control Panel</h1>
+          <span style={{ color: 'var(--accent)', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Habibi Kitchen Command</span>
+          <h1 style={{ margin: '2px 0 0 0', fontSize: '1.8rem', color: '#fff', fontWeight: 800 }}>Store Manager Dashboard</h1>
         </div>
-        <button onClick={logout} className="btn btn-outline" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>
+        <button onClick={logout} className="btn btn-outline" style={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 700, padding: '10px 18px' }}>
           Logout 🚪
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
-        <div style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Total Revenue</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: 'var(--accent)' }}>Rs. {totalRevenue.toLocaleString()}</div>
+      {/* Overview Stat Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+        <div style={{ background: 'linear-gradient(135deg, rgba(217,164,65,0.12), var(--bg-panel))', padding: '22px', borderRadius: '12px', border: '1px solid var(--accent)', textAlign: 'left' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 700, marginBottom: '6px' }}>💰 Today's Revenue</div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#fff' }}>Rs. {totalRevenue.toLocaleString()}</div>
         </div>
-        <div style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Total Orders</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 'bold' }}>{totalOrders}</div>
+
+        <div style={{ background: 'var(--bg-panel)', padding: '22px', borderRadius: '12px', border: '1px solid var(--border)', textAlign: 'left' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '6px' }}>📦 Total Orders Received</div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#fff' }}>{totalOrders}</div>
         </div>
-        <div style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Active Kitchen Queue</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: 'var(--primary)' }}>{activeCount}</div>
+
+        <div style={{ background: 'linear-gradient(135deg, rgba(217,83,79,0.15), var(--bg-panel))', padding: '22px', borderRadius: '12px', border: '1px solid var(--primary)', textAlign: 'left' }}>
+          <div style={{ fontSize: '0.85rem', color: '#ff6b6b', fontWeight: 700, marginBottom: '6px' }}>🔥 Active Kitchen Queue</div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#ff6b6b' }}>{activeCount} <span style={{ fontSize: '0.9rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>orders</span></div>
         </div>
-        <div style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Delivered</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#4caf50' }}>{deliveredOrders.length}</div>
+
+        <div style={{ background: 'linear-gradient(135deg, rgba(22,163,74,0.15), var(--bg-panel))', padding: '22px', borderRadius: '12px', border: '1px solid #16a34a', textAlign: 'left' }}>
+          <div style={{ fontSize: '0.85rem', color: '#4ade80', fontWeight: 700, marginBottom: '6px' }}>✅ Successfully Delivered</div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#4ade80' }}>{deliveredOrders.length}</div>
         </div>
       </div>
 
-      <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', marginBottom: '30px' }}>
-        <h3 style={{ margin: '0 0 20px 0', color: 'var(--accent)' }}>Live Orders Feed</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px' }}>Order ID</th>
-                <th style={{ padding: '10px' }}>Customer</th>
-                <th style={{ padding: '10px' }}>Items</th>
-                <th style={{ padding: '10px' }}>Total</th>
-                <th style={{ padding: '10px' }}>Status Stage</th>
-                <th style={{ padding: '10px' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map(order => (
-                <tr key={order.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                  <td style={{ padding: '12px 10px', fontWeight: 'bold', color: 'var(--accent)' }}>{order.id}</td>
-                  <td style={{ padding: '12px 10px' }}>
-                    <strong>{order.customer?.name}</strong><br/>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{order.customer?.phone}</span>
-                  </td>
-                  <td style={{ padding: '12px 10px', fontSize: '0.85rem' }}>
-                    {(order.items || []).map(i => `${i.quantity}x ${i.name}`).join(", ")}
-                  </td>
-                  <td style={{ padding: '12px 10px', fontWeight: 'bold' }}>Rs. {order.total}</td>
-                  <td style={{ padding: '12px 10px' }}>
-                    <select 
-                      value={order.status}
-                      onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                      style={{ padding: '6px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
-                    >
-                      <option value="received">Order Received</option>
-                      <option value="queue">In Queue</option>
-                      <option value="cooking">Cooking</option>
-                      <option value="packing">Packing</option>
-                      <option value="delivery">Out for Delivery</option>
-                      <option value="delivered">Delivered</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: '12px 10px' }}>
-                    <button 
-                      onClick={() => handlePrintInvoice(order)}
-                      style={{ padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-main)', cursor: 'pointer' }}
-                    >
-                      🖨️ Print
-                    </button>
-                  </td>
+      {/* Main Live Orders Section */}
+      <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)', marginBottom: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+          <h2 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.3rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>⚡ Live Kitchen Orders Feed</span>
+            <span style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '20px', background: 'var(--primary)', color: '#fff' }}>Auto-Syncing</span>
+          </h2>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Click the dropdown status to update kitchen progress</span>
+        </div>
+
+        {orders.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '10px' }}>🍽️</div>
+            <h3 style={{ margin: 0, color: '#fff' }}>No Active Orders in Kitchen</h3>
+            <p style={{ margin: '6px 0 0 0', fontSize: '0.9rem' }}>New customer orders placed on the website will appear here automatically.</p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <th style={{ padding: '14px 10px' }}>Order Number</th>
+                  <th style={{ padding: '14px 10px' }}>Customer Info</th>
+                  <th style={{ padding: '14px 10px' }}>Items Ordered</th>
+                  <th style={{ padding: '14px 10px' }}>Total Amount</th>
+                  <th style={{ padding: '14px 10px' }}>Order Status</th>
+                  <th style={{ padding: '14px 10px' }}>Print Receipt</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {orders.map(order => {
+                  const statusInfo = getStatusColor(order.status);
+                  return (
+                    <tr key={order.id} style={{ borderBottom: '1px solid var(--border-light)', background: 'var(--bg-elevated)' }}>
+                      <td style={{ padding: '16px 10px', verticalAlign: 'top' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--accent)', background: 'rgba(217,164,65,0.1)', padding: '6px 12px', borderRadius: '6px', display: 'inline-block' }}>
+                          {order.id}
+                        </span>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                          {new Date(order.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: '16px 10px', verticalAlign: 'top' }}>
+                        <strong style={{ fontSize: '1rem', color: '#fff', display: 'block' }}>{order.customer?.name}</strong>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 700, margin: '2px 0' }}>
+                          📞 {order.customer?.phone}
+                        </div>
+                        {order.customer?.address && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '200px' }}>
+                            📍 {order.customer?.address}
+                          </div>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '16px 10px', verticalAlign: 'top', fontSize: '0.9rem' }}>
+                        {(order.items || []).map((item, idx) => (
+                          <div key={idx} style={{ marginBottom: '4px', lineHeight: '1.4' }}>
+                            <span style={{ fontWeight: 800, color: 'var(--accent)' }}>{item.quantity}x</span> {item.name}
+                            {item.options?.size && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}> ({item.options.size})</span>}
+                          </div>
+                        ))}
+                      </td>
+
+                      <td style={{ padding: '16px 10px', verticalAlign: 'top' }}>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#4ade80' }}>Rs. {order.total}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          💳 {order.payment || 'Cash on Delivery'}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: '16px 10px', verticalAlign: 'top' }}>
+                        <select 
+                          value={order.status}
+                          onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                          style={{ 
+                            padding: '10px 14px', 
+                            borderRadius: '8px', 
+                            background: statusInfo.bg, 
+                            color: statusInfo.color, 
+                            border: 'none', 
+                            fontWeight: 800, 
+                            fontSize: '0.88rem', 
+                            cursor: 'pointer',
+                            width: '100%',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                          }}
+                        >
+                          <option value="received">📋 Order Received</option>
+                          <option value="queue">⏳ In Queue</option>
+                          <option value="cooking">👨‍🍳 Cooking in Kitchen</option>
+                          <option value="packing">📦 Packing Order</option>
+                          <option value="delivery">🛵 Out for Delivery</option>
+                          <option value="delivered">✅ Delivered</option>
+                          <option value="cancelled">❌ Cancelled</option>
+                        </select>
+                      </td>
+
+                      <td style={{ padding: '16px 10px', verticalAlign: 'top' }}>
+                        <button 
+                          onClick={() => handlePrintInvoice(order)}
+                          style={{ 
+                            padding: '10px 16px', 
+                            background: 'var(--bg-panel)', 
+                            border: '1px solid var(--accent)', 
+                            borderRadius: '8px', 
+                            color: 'var(--accent)', 
+                            fontWeight: 800, 
+                            fontSize: '0.85rem', 
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          🖨️ Print Receipt
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
+      {/* Secondary Management Cards (Delivery Settings & Reviews Moderation) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-          <h3 style={{ margin: '0 0 15px 0', color: 'var(--accent)' }}>Delivery & Capacity Settings</h3>
+        
+        {/* Delivery Settings Card */}
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)' }}>
+          <h3 style={{ margin: '0 0 16px 0', color: 'var(--accent)', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🚚 Delivery & Capacity Settings</span>
+          </h3>
+
           <form onSubmit={handleSaveSettings}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px', marginBottom: '16px', cursor: 'pointer', border: '1px solid var(--border-light)' }}>
               <input 
                 type="checkbox"
                 checked={settingsEnabledInput}
                 onChange={(e) => setSettingsEnabledInput(e.target.checked)}
+                style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
               />
-              <span style={{ fontWeight: 'bold' }}>Enable Delivery Charge</span>
+              <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: '#fff' }}>Enable Delivery Charge</span>
             </label>
 
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px' }}>Delivery Fee Amount (Rs.)</label>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Delivery Charge Amount (Rs.)</label>
               <input 
                 type="number" 
                 value={settingsFeeInput}
                 onChange={(e) => setSettingsFeeInput(e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
               />
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px' }}>Max Active Kitchen Orders Cap</label>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Maximum Orders Kitchen Limit</label>
               <input 
                 type="number" 
                 value={settingsMaxInput}
                 onChange={(e) => setSettingsMaxInput(e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-main)' }}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 700 }}>
               Save Settings 💾
             </button>
           </form>
         </div>
 
-        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-          <h3 style={{ margin: '0 0 15px 0', color: 'var(--accent)' }}>Pending Reviews Moderation ({pendingReviews.length})</h3>
+        {/* Customer Reviews Moderation Card */}
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)' }}>
+          <h3 style={{ margin: '0 0 16px 0', color: 'var(--accent)', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>⭐ Customer Reviews Approval ({pendingReviews.length})</span>
+          </h3>
 
           {pendingReviews.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No pending reviews to moderate.</p>
+            <div style={{ textAlign: 'center', padding: '30px 15px', color: 'var(--text-muted)', background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px border-dashed var(--border)' }}>
+              <div style={{ fontSize: '2.2rem', marginBottom: '6px' }}>✨</div>
+              <p style={{ margin: 0, fontSize: '0.9rem' }}>All customer reviews have been reviewed!</p>
+            </div>
           ) : (
             pendingReviews.map(rev => (
-              <div key={rev.id} style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginBottom: '10px', border: '1px solid var(--border-light)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 'bold' }}>
+              <div key={rev.id} style={{ padding: '14px', background: 'var(--bg-elevated)', borderRadius: '10px', marginBottom: '12px', border: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.92rem', fontWeight: 800, color: '#fff' }}>
                   <span>{rev.name} ({'⭐'.repeat(rev.rating)})</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{rev.date}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{rev.date}</span>
                 </div>
-                <p style={{ margin: '6px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>"{rev.comment}"</p>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                  <button onClick={() => handleApproveReview(rev.id)} style={{ padding: '4px 10px', background: '#4caf50', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>Approve ✅</button>
-                  <button onClick={() => handleDeleteReview(rev.id)} style={{ padding: '4px 10px', background: 'var(--primary)', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>Delete 🗑️</button>
+                <p style={{ margin: '8px 0', fontSize: '0.88rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>"{rev.comment}"</p>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  <button onClick={() => handleApproveReview(rev.id)} style={{ padding: '8px 14px', background: '#16a34a', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>Approve ✅</button>
+                  <button onClick={() => handleDeleteReview(rev.id)} style={{ padding: '8px 14px', background: '#dc2626', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>Delete 🗑️</button>
                 </div>
               </div>
             ))
           )}
         </div>
+
       </div>
     </main>
   );
