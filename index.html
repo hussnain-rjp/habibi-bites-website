@@ -4,16 +4,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Habibi Bites | Enterprise React Ordering Platform | Gujranwala</title>
+  <title>Habibi Bites | Fast Food & Traditional Kitchen | Gujranwala</title>
   <meta name="description"
     content="Order piping hot pizzas, wraps, juicy burgers, authentic Pakistani karahis, starters, and milkshakes from Habibi Bites Gujranwala. Powered by React & Supabase.">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="preload" as="image" href="/assets/logo.png" type="image/png" fetchpriority="high">
 
-  <!-- React & Supabase CDN Scripts -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- React & Supabase CDN Scripts with non-blocking defer loading -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin defer></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 </head>
 
 <body>
@@ -22,10 +25,10 @@
   <div id="root"></div>
 
   <!-- Global Dataset -->
-  <script src="/js/menu-data.js"></script>
+  <script src="/js/menu-data.js" defer></script>
 
-  <!-- React Application Launcher (Supports Port 5500 & Double-Clicking) -->
-  <script src="/js/react-app.js"></script>
+  <!-- React Application Launcher -->
+  <script src="/js/react-app.js" defer></script>
 </body>
 
 </html>

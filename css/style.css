@@ -2695,6 +2695,14 @@ img {
   content-visibility: auto;
 }
 
+.menu-item-img {
+  aspect-ratio: 1 / 1;
+}
+
+.deal-card-image-box img {
+  aspect-ratio: 16 / 9;
+}
+
 .menu-item-img, 
 .deal-card-image-box img,
 .hero-image-container img {
@@ -2708,5 +2716,6 @@ img {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
 
 

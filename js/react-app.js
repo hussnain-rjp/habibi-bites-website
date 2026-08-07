@@ -119,6 +119,11 @@
   if (typeof window !== 'undefined' && window.supabase && window.supabase.createClient) {
     try {
       supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      supabaseClient.channel('public:orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+          window.dispatchEvent(new Event("storage_changed"));
+        })
+        .subscribe();
     } catch (e) {
       console.warn("Supabase init error:", e);
     }
@@ -178,16 +183,38 @@
             .select('*')
             .order('created_at', { ascending: false });
           if (!error && data && data.length > 0) {
-            const mapped = data.map(o => ({
-              id: o.id || o.order_id,
-              customer: typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer,
-              items: typeof o.items === 'string' ? JSON.parse(o.items) : o.items,
-              total: parseFloat(o.total || o.total_amount || 0),
-              deliveryFee: parseFloat(o.delivery_fee || 0),
-              status: o.status || 'received',
-              createdAt: o.created_at || o.createdAt || new Date().toISOString(),
-              updates: o.updates ? (typeof o.updates === 'string' ? JSON.parse(o.updates) : o.updates) : []
-            }));
+            const mapped = data.map(o => {
+              let cust = o.customer;
+              if (typeof cust === 'string') {
+                try { cust = JSON.parse(cust); } catch (e) {}
+              }
+              if (!cust && (o.customer_name || o.phone || o.name)) {
+                cust = { name: o.customer_name || o.name || 'Guest', phone: o.phone || o.customer_phone || '', address: o.address || o.delivery_address || '' };
+              }
+
+              let itms = o.items;
+              if (typeof itms === 'string') {
+                try { itms = JSON.parse(itms); } catch (e) {}
+              }
+              if (!Array.isArray(itms)) itms = [];
+
+              let upds = o.updates;
+              if (typeof upds === 'string') {
+                try { upds = JSON.parse(upds); } catch (e) {}
+              }
+              if (!Array.isArray(upds)) upds = [{ stage: o.status || 'received', time: o.created_at || new Date().toISOString() }];
+
+              return {
+                id: String(o.id || o.order_id || 'HB-5100'),
+                customer: cust || { name: 'Guest', phone: 'N/A', address: 'Takeaway' },
+                items: itms,
+                total: parseFloat(o.total || o.total_amount || 0),
+                deliveryFee: parseFloat(o.delivery_fee || o.deliveryFee || 0),
+                status: o.status || 'received',
+                createdAt: o.created_at || o.createdAt || new Date().toISOString(),
+                updates: upds
+              };
+            });
             const ids = new Set(mapped.map(m => String(m.id).toUpperCase()));
             localOrders.forEach(lo => {
               if (lo && lo.id && !ids.has(String(lo.id).toUpperCase())) {
@@ -230,16 +257,26 @@
 
       if (supabaseClient) {
         try {
-          await supabaseClient.from('orders').insert([{
+          const payload = {
             id: newOrder.id,
-            customer: JSON.stringify(customer),
-            items: JSON.stringify(items),
+            customer: customer,
+            items: items,
             total: newOrder.total,
             delivery_fee: newOrder.deliveryFee,
             status: newOrder.status,
             created_at: newOrder.createdAt,
-            updates: JSON.stringify(newOrder.updates)
-          }]);
+            updates: newOrder.updates
+          };
+          const { error } = await supabaseClient.from('orders').insert([payload]);
+          if (error) {
+            console.warn("Supabase direct insert fallback to stringified JSON:", error.message);
+            await supabaseClient.from('orders').insert([{
+              ...payload,
+              customer: JSON.stringify(customer),
+              items: JSON.stringify(items),
+              updates: JSON.stringify(newOrder.updates)
+            }]);
+          }
         } catch (err) {
           console.warn("Supabase insert order fallback:", err);
         }
