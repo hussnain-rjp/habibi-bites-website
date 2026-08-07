@@ -9,7 +9,10 @@ export const Home = ({ setActivePage }) => {
 
   useEffect(() => {
     loadDeals();
-    db.getDiscountSettings().then(setDiscountRule).catch(() => {});
+    const loadDisc = () => db.getDiscountSettings().then(setDiscountRule).catch(() => {});
+    loadDisc();
+    window.addEventListener('storage_changed', loadDisc);
+    return () => window.removeEventListener('storage_changed', loadDisc);
   }, []);
 
   const loadDeals = async () => {

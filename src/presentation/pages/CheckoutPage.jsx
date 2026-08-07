@@ -40,6 +40,8 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
 
   useEffect(() => {
     loadSettings();
+    window.addEventListener('storage_changed', loadSettings);
+    return () => window.removeEventListener('storage_changed', loadSettings);
   }, []);
 
   const loadSettings = async () => {

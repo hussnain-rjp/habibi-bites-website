@@ -13,6 +13,11 @@ export const MenuPage = () => {
 
   useEffect(() => {
     loadData();
+    const handleStorage = () => {
+      db.getDiscountSettings().then(setDiscountRule).catch(() => {});
+    };
+    window.addEventListener('storage_changed', handleStorage);
+    return () => window.removeEventListener('storage_changed', handleStorage);
   }, []);
 
   const loadData = async () => {

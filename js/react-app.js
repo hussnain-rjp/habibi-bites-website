@@ -124,6 +124,11 @@
           window.dispatchEvent(new Event("storage_changed"));
         })
         .subscribe();
+      supabaseClient.channel('public:settings')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
+          window.dispatchEvent(new Event("storage_changed"));
+        })
+        .subscribe();
     } catch (e) {
       console.warn("Supabase init error:", e);
     }
@@ -546,10 +551,42 @@
   // --- PAGE VIEW COMPONENTS ---
 
   function HomePageView({ setActivePage, addToCart }) {
+    const [discountRule, setDiscountRule] = useState(null);
+    useEffect(() => {
+      const loadDisc = () => repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
+      loadDisc();
+      window.addEventListener('storage_changed', loadDisc);
+      return () => window.removeEventListener('storage_changed', loadDisc);
+    }, []);
+
     const deals = window.HABIBI_DEALS || [];
     const featured = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
 
     return React.createElement('main', null,
+      discountRule && discountRule.enabled ? React.createElement('div', {
+        style: {
+          background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+          color: '#000',
+          padding: '16px 24px',
+          margin: '20px auto 0 auto',
+          maxWidth: '1200px',
+          borderRadius: 'var(--radius-sm)',
+          textAlign: 'center',
+          boxShadow: '0 8px 25px rgba(217, 83, 79, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px'
+        }
+      },
+        React.createElement('span', { style: { fontSize: '1.5rem' } }, '🎁'),
+        React.createElement('div', null,
+          React.createElement('div', { style: { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'uppercase' } }, discountRule.label || 'Special Promotion Active!'),
+          React.createElement('div', { style: { fontSize: '0.9rem', opacity: 0.9 } },
+            `Enjoy ${discountRule.value}${discountRule.type === 'percentage' ? '%' : ' Rs.'} OFF on ${discountRule.targetType === 'all' ? 'all items' : discountRule.targetType === 'category' ? `all ${discountRule.targetCategory}` : 'selected items'}!`
+          )
+        )
+      ) : null,
       React.createElement('section', { className: 'hero-section' },
         React.createElement('div', { className: 'hero-container' },
           React.createElement('div', { className: 'hero-content' },
@@ -615,9 +652,14 @@
   function MenuView({ addToCart, onCustomize }) {
     const [items, setItems] = useState([]);
     const [activeCat, setActiveCat] = useState('pizza');
+    const [discountRule, setDiscountRule] = useState(null);
 
     useEffect(() => {
       repo.getMenuItems().then(setItems);
+      const loadDisc = () => repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
+      loadDisc();
+      window.addEventListener('storage_changed', loadDisc);
+      return () => window.removeEventListener('storage_changed', loadDisc);
     }, []);
 
     const categories = window.HABIBI_MENU?.categories || [
@@ -638,6 +680,29 @@
     };
 
     return React.createElement('main', { className: 'section-container page-top-margin' },
+      discountRule && discountRule.enabled ? React.createElement('div', {
+        style: {
+          background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+          color: '#000',
+          padding: '16px 24px',
+          marginBottom: '20px',
+          borderRadius: 'var(--radius-sm)',
+          textAlign: 'center',
+          boxShadow: '0 8px 25px rgba(217, 83, 79, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px'
+        }
+      },
+        React.createElement('span', { style: { fontSize: '1.5rem' } }, '🎁'),
+        React.createElement('div', null,
+          React.createElement('div', { style: { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'uppercase' } }, discountRule.label || 'Special Promotion Active!'),
+          React.createElement('div', { style: { fontSize: '0.9rem', opacity: 0.9 } },
+            `Enjoy ${discountRule.value}${discountRule.type === 'percentage' ? '%' : ' Rs.'} OFF on ${discountRule.targetType === 'all' ? 'all items' : discountRule.targetType === 'category' ? `all ${discountRule.targetCategory}` : 'selected items'}!`
+          )
+        )
+      ) : null,
       React.createElement('div', { className: 'section-header' },
         React.createElement('span', { className: 'section-subtitle' }, 'Habibi Bites Kitchen'),
         React.createElement('h1', { className: 'section-title' }, 'Explore Our Online Menu')
@@ -672,9 +737,39 @@
 
   function DealsView({ addToCart }) {
     const [deals, setDeals] = useState([]);
-    useEffect(() => { repo.getDeals().then(setDeals); }, []);
+    const [discountRule, setDiscountRule] = useState(null);
+    useEffect(() => {
+      repo.getDeals().then(setDeals);
+      const loadDisc = () => repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
+      loadDisc();
+      window.addEventListener('storage_changed', loadDisc);
+      return () => window.removeEventListener('storage_changed', loadDisc);
+    }, []);
 
     return React.createElement('main', { className: 'section-container page-top-margin' },
+      discountRule && discountRule.enabled ? React.createElement('div', {
+        style: {
+          background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+          color: '#000',
+          padding: '16px 24px',
+          marginBottom: '20px',
+          borderRadius: 'var(--radius-sm)',
+          textAlign: 'center',
+          boxShadow: '0 8px 25px rgba(217, 83, 79, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px'
+        }
+      },
+        React.createElement('span', { style: { fontSize: '1.5rem' } }, '🎁'),
+        React.createElement('div', null,
+          React.createElement('div', { style: { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'uppercase' } }, discountRule.label || 'Special Promotion Active!'),
+          React.createElement('div', { style: { fontSize: '0.9rem', opacity: 0.9 } },
+            `Enjoy ${discountRule.value}${discountRule.type === 'percentage' ? '%' : ' Rs.'} OFF on ${discountRule.targetType === 'all' ? 'all items' : discountRule.targetType === 'category' ? `all ${discountRule.targetCategory}` : 'selected items'}!`
+          )
+        )
+      ) : null,
       React.createElement('div', { className: 'section-header' },
         React.createElement('span', { className: 'section-subtitle' }, 'Super Saver Combos'),
         React.createElement('h1', { className: 'section-title' }, 'Habibi Exclusive Deals')
