@@ -112,6 +112,18 @@
     try { localStorage.setItem(key, JSON.stringify(data)); window.dispatchEvent(new Event("storage_changed")); } catch (e) {}
   }
 
+  const SUPABASE_URL = "https://wgsssibktygkwyicdtlr.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indnc3NzaWJrdHlna3d5aWNkdGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxMjEwNDYsImV4cCI6MjEwMTY5NzA0Nn0.EYAek-TmMZ_oE1t9jRdcZjlfcNC3e77rTPMGh0jgFRo";
+
+  let supabaseClient = null;
+  if (typeof window !== 'undefined' && window.supabase && window.supabase.createClient) {
+    try {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch (e) {
+      console.warn("Supabase init error:", e);
+    }
+  }
+
   const DEFAULT_ORDERS = [
     {
       id: "HB-5103",
@@ -157,9 +169,42 @@
       writeStore(DB_KEYS.MENU_ITEMS, items);
     }
     async getDeals() { return readStore(DB_KEYS.DEALS) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []); }
-    async getOrders() { return readStore(DB_KEYS.ORDERS) || []; }
-    async getOrderById(id) { return (await this.getOrders()).find(o => o.id.toUpperCase() === id.toUpperCase().trim()) || null; }
-    async getOrdersByPhone(phone) { const clean = phone.replace(/[^0-9]/g, ""); return (await this.getOrders()).filter(o => o.customer?.phone?.replace(/[^0-9]/g, "") === clean); }
+    async getOrders() {
+      let localOrders = readStore(DB_KEYS.ORDERS) || [];
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient
+            .from('orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (!error && data && data.length > 0) {
+            const mapped = data.map(o => ({
+              id: o.id || o.order_id,
+              customer: typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer,
+              items: typeof o.items === 'string' ? JSON.parse(o.items) : o.items,
+              total: parseFloat(o.total || o.total_amount || 0),
+              deliveryFee: parseFloat(o.delivery_fee || 0),
+              status: o.status || 'received',
+              createdAt: o.created_at || o.createdAt || new Date().toISOString(),
+              updates: o.updates ? (typeof o.updates === 'string' ? JSON.parse(o.updates) : o.updates) : []
+            }));
+            const ids = new Set(mapped.map(m => String(m.id).toUpperCase()));
+            localOrders.forEach(lo => {
+              if (lo && lo.id && !ids.has(String(lo.id).toUpperCase())) {
+                mapped.push(lo);
+              }
+            });
+            writeStore(DB_KEYS.ORDERS, mapped);
+            return mapped;
+          }
+        } catch (err) {
+          console.warn("Supabase fetch orders fallback to local:", err);
+        }
+      }
+      return localOrders;
+    }
+    async getOrderById(id) { const orders = await this.getOrders(); return orders.find(o => String(o.id).toUpperCase() === id.toUpperCase().trim()) || null; }
+    async getOrdersByPhone(phone) { const clean = phone.replace(/[^0-9]/g, ""); const orders = await this.getOrders(); return orders.filter(o => o.customer?.phone?.replace(/[^0-9]/g, "") === clean); }
     async createOrder(customer, items, total, deliveryFee = 0) {
       const settings = await this.getDeliverySettings();
       const orders = await this.getOrders();
@@ -182,11 +227,28 @@
       };
       orders.unshift(newOrder);
       writeStore(DB_KEYS.ORDERS, orders);
+
+      if (supabaseClient) {
+        try {
+          await supabaseClient.from('orders').insert([{
+            id: newOrder.id,
+            customer: JSON.stringify(customer),
+            items: JSON.stringify(items),
+            total: newOrder.total,
+            delivery_fee: newOrder.deliveryFee,
+            status: newOrder.status,
+            created_at: newOrder.createdAt,
+            updates: JSON.stringify(newOrder.updates)
+          }]);
+        } catch (err) {
+          console.warn("Supabase insert order fallback:", err);
+        }
+      }
       return newOrder;
     }
     async updateOrderStatus(orderId, newStatus) {
       const orders = await this.getOrders();
-      const idx = orders.findIndex(o => o.id.toUpperCase() === orderId.toUpperCase().trim());
+      const idx = orders.findIndex(o => String(o.id).toUpperCase() === orderId.toUpperCase().trim());
       if (idx !== -1) {
         orders[idx].status = newStatus;
         if (!orders[idx].updates) orders[idx].updates = [];
@@ -194,6 +256,17 @@
           orders[idx].updates.push({ stage: newStatus, time: new Date().toISOString() });
         }
         writeStore(DB_KEYS.ORDERS, orders);
+
+        if (supabaseClient) {
+          try {
+            await supabaseClient
+              .from('orders')
+              .update({ status: newStatus, updates: JSON.stringify(orders[idx].updates) })
+              .eq('id', orderId);
+          } catch (err) {
+            console.warn("Supabase status update fallback:", err);
+          }
+        }
       }
       return orders[idx];
     }
