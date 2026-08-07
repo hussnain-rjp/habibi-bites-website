@@ -806,12 +806,66 @@
     );
   }
 
+  function playOrderBeepSound() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, ctx.currentTime);
+      gain1.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.15);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.12);
+      gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 0.12);
+      osc2.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      console.warn("Audio Context playback error:", e);
+    }
+  }
+
   // --- ADMIN DASHBOARD WITH CUSTOM IMAGE UPLOAD SUPPORT FROM PC ---
   function AdminView({ isAdmin, setIsAdmin }) {
     const [u, setU] = useState('');
     const [p, setP] = useState('');
     const [adminTab, setAdminTab] = useState('orders');
     const [orders, setOrders] = useState([]);
+    const [soundEnabled, setSoundEnabled] = useState(() => {
+      try {
+        const s = localStorage.getItem("habibi_admin_sound_enabled");
+        return s !== null ? JSON.parse(s) : true;
+      } catch (e) { return true; }
+    });
+    const [newlyAddedId, setNewlyAddedId] = useState(null);
+    const prevOrdersRef = React.useRef(null);
+    const soundEnabledRef = React.useRef(soundEnabled);
+
+    useEffect(() => {
+      soundEnabledRef.current = soundEnabled;
+    }, [soundEnabled]);
+
+    const toggleSound = () => {
+      setSoundEnabled(prev => {
+        const next = !prev;
+        try { localStorage.setItem("habibi_admin_sound_enabled", JSON.stringify(next)); } catch(e){}
+        if (next) playOrderBeepSound();
+        return next;
+      });
+    };
     const [pendingReviews, setPendingReviews] = useState([]);
     const [menuItems, setMenuItems] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState('pizza');
@@ -891,7 +945,22 @@
     }, [isAdmin, adminTab]);
 
     const loadDashboard = async () => {
-      setOrders(await repo.getOrders());
+      const latestOrders = await repo.getOrders();
+      setOrders(latestOrders);
+
+      if (prevOrdersRef.current !== null) {
+        const existingIds = new Set(prevOrdersRef.current.map(o => String(o.id)));
+        const brandNew = latestOrders.find(o => !existingIds.has(String(o.id)));
+        if (brandNew) {
+          setNewlyAddedId(brandNew.id);
+          if (soundEnabledRef.current) {
+            playOrderBeepSound();
+          }
+          setTimeout(() => setNewlyAddedId(null), 4000);
+        }
+      }
+      prevOrdersRef.current = latestOrders;
+
       setPendingReviews(await repo.getPendingReviews());
       setMenuItems(await repo.getMenuItems());
       const s = await repo.getDeliverySettings();
@@ -1019,7 +1088,14 @@
       // Header Bar
       React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' } },
         React.createElement('h1', { className: 'section-title', style: { margin: 0 } }, 'Admin Control Dashboard'),
-        React.createElement('button', { className: 'btn btn-outline', onClick: () => { repo.logoutAdmin(); setIsAdmin(false); } }, 'Logout 🚪')
+        React.createElement('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
+          React.createElement('button', {
+            className: soundEnabled ? 'btn btn-primary' : 'btn btn-outline',
+            onClick: toggleSound,
+            style: { cursor: 'pointer', padding: '8px 14px', fontSize: '0.85rem' }
+          }, soundEnabled ? '🔔 Sound Alerts ON' : '🔕 Sound Alerts OFF'),
+          React.createElement('button', { className: 'btn btn-outline', onClick: () => { repo.logoutAdmin(); setIsAdmin(false); } }, 'Logout 🚪')
+        )
       ),
 
       // Admin Tab Navigation
@@ -1083,7 +1159,14 @@
               )
             ),
             React.createElement('tbody', null,
-              orders.map(o => React.createElement('tr', { key: o.id, style: { borderBottom: '1px solid var(--border-light)' } },
+              orders.map(o => React.createElement('tr', {
+                key: o.id,
+                style: {
+                  borderBottom: '1px solid var(--border-light)',
+                  background: newlyAddedId === o.id ? 'rgba(76, 175, 80, 0.25)' : 'transparent',
+                  transition: 'background 0.8s ease'
+                }
+              },
                 React.createElement('td', { style: { padding: '10px', fontWeight: 'bold', color: 'var(--accent)' } }, o.id),
                 React.createElement('td', { style: { padding: '10px' } },
                   React.createElement('strong', null, o.customer?.name), React.createElement('br'),
