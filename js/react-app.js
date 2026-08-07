@@ -42,7 +42,7 @@
         </style>
       </head>
       <body>
-        <img src="assets/logo.png" alt="Logo" class="logo-img" />
+        <img src="/assets/logo.png" alt="Logo" class="logo-img" />
         <div class="center bold" style="font-size: 16px;">HABIBI BITES</div>
         <div class="center">Fast Food & Traditional Kitchen</div>
         <div class="center">Qila Didar Singh, Gujranwala</div>
@@ -286,7 +286,7 @@
       React.createElement('header', { id: 'global-header' },
         React.createElement('div', { className: 'nav-container' },
           React.createElement('button', { onClick: () => setActivePage('home'), className: 'logo-wrapper', style: { background: 'none', border: 'none', cursor: 'pointer', padding: 0 } },
-            React.createElement('img', { src: 'assets/logo.png', alt: 'Habibi Bites Logo', className: 'logo-img', style: { height: '68px', borderRadius: '4px', border: '2px solid var(--primary)', background: '#000', boxShadow: 'var(--shadow-sm)' } })
+            React.createElement('img', { src: '/assets/logo.png', alt: 'Habibi Bites Logo', className: 'logo-img', style: { height: '68px', borderRadius: '4px', border: '2px solid var(--primary)', background: '#000', boxShadow: 'var(--shadow-sm)' } })
           ),
           React.createElement('nav', { className: `nav-links ${mobileNavOpen ? 'active' : ''}` },
             [
@@ -361,7 +361,7 @@
           React.createElement('div', { className: 'hero-image-wrapper' },
             React.createElement('div', { className: 'hero-image-glow' }),
             React.createElement('div', { className: 'hero-image-container', style: { position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' } },
-              React.createElement('img', { src: 'assets/logo.png', alt: 'Habibi Bites Logo', style: { width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'contain', borderRadius: '50%', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#fff', padding: '10px' } })
+              React.createElement('img', { src: '/assets/logo.png', alt: 'Habibi Bites Logo', style: { width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'contain', borderRadius: '50%', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#fff', padding: '10px' } })
             )
           )
         )
@@ -682,7 +682,7 @@
     const [itemDesc, setItemDesc] = useState('');
     const [itemCat, setItemCat] = useState('pizza');
     const [itemPrice, setItemPrice] = useState(550);
-    const [itemImg, setItemImg] = useState('assets/hero_food_collage.png');
+    const [itemImg, setItemImg] = useState('/assets/hero_food_collage.png');
     
     // Pizza Size Prices State
     const [priceSmall, setPriceSmall] = useState(550);
@@ -721,19 +721,19 @@
     const [dangerConfirmText, setDangerConfirmText] = useState('');
 
     const assetOptions = [
-      { label: "Chicken Tikka Pizza", path: "assets/pizza_tikka_real.png" },
-      { label: "Zinger Burger", path: "assets/burger_zinger.png" },
-      { label: "Double Decker Zinger", path: "assets/burger_double_zinger.png" },
-      { label: "Smokey Beef Burger", path: "assets/burger_beef.png" },
-      { label: "Shawarma Wrap", path: "assets/wrap_shawarma.png" },
-      { label: "Paratha Roll", path: "assets/wrap_paratha.png" },
-      { label: "Crispy Broast", path: "assets/desi_broast.png" },
-      { label: "Chicken Karahi", path: "assets/desi_karahi.png" },
-      { label: "Seekh Kabab Handi", path: "assets/desi_kabab.png" },
-      { label: "Club Fries", path: "assets/starters_fries.png" },
-      { label: "BBQ Wings", path: "assets/starters_wings.png" },
-      { label: "Alfredo Pasta", path: "assets/pasta_alfredo.png" },
-      { label: "Hero Food Collage", path: "assets/hero_food_collage.png" }
+      { label: "Chicken Tikka Pizza", path: "/assets/pizza_tikka.png" },
+      { label: "Zinger Burger", path: "/assets/burger_bomba.png" },
+      { label: "Double Decker Zinger", path: "/assets/burger_bomba.png" },
+      { label: "Smokey Beef Burger", path: "/assets/burger_bomba.png" },
+      { label: "Shawarma Wrap", path: "/assets/burger_bomba.png" },
+      { label: "Paratha Roll", path: "/assets/burger_bomba.png" },
+      { label: "Crispy Broast", path: "/assets/desi_karahi.png" },
+      { label: "Chicken Karahi", path: "/assets/desi_karahi.png" },
+      { label: "Seekh Kabab Handi", path: "/assets/desi_karahi.png" },
+      { label: "Club Fries", path: "/assets/starters_loaded_fries.png" },
+      { label: "BBQ Wings", path: "/assets/starters_loaded_fries.png" },
+      { label: "Alfredo Pasta", path: "/assets/hero_food_collage.png" },
+      { label: "Hero Food Collage", path: "/assets/hero_food_collage.png" }
     ];
 
     useEffect(() => {
@@ -788,7 +788,7 @@
       setItemName(item.name || '');
       setItemDesc(item.description || '');
       setItemCat(item.category || 'pizza');
-      setItemImg(item.image || 'assets/hero_food_collage.png');
+      setItemImg(item.image || '/assets/hero_food_collage.png');
       
       if (item.prices) {
         setItemPrice(item.prices.default || Object.values(item.prices)[0] || 550);
@@ -807,7 +807,7 @@
       setItemName('');
       setItemDesc('');
       setItemPrice(550);
-      setItemImg('assets/hero_food_collage.png');
+      setItemImg('/assets/hero_food_collage.png');
     };
 
     const handleSaveMenuItem = async (e) => {
@@ -832,7 +832,7 @@
         category: itemCat,
         description: itemDesc,
         prices: pricesObj,
-        image: itemImg || "assets/hero_food_collage.png"
+        image: itemImg || "/assets/hero_food_collage.png"
       };
 
       await repo.saveMenuItem(itemToSave);
@@ -976,7 +976,7 @@
             // Image Preview, PC File Upload & Preset Picker Section
             React.createElement('div', { style: { marginBottom: '15px', background: 'var(--bg-elevated)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border-light)' } },
               React.createElement('div', { style: { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '10px' } },
-                React.createElement('img', { src: itemImg || 'assets/hero_food_collage.png', alt: 'Preview', style: { width: '75px', height: '75px', objectFit: 'cover', borderRadius: '6px', border: '2px solid var(--accent)' } }),
+                React.createElement('img', { src: itemImg || '/assets/hero_food_collage.png', alt: 'Preview', style: { width: '75px', height: '75px', objectFit: 'cover', borderRadius: '6px', border: '2px solid var(--accent)' } }),
                 React.createElement('div', { style: { flex: 1 } },
                   React.createElement('label', { style: { display: 'block', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '4px', color: 'var(--accent)' } }, '📁 Upload Custom Photo from PC:'),
                   React.createElement('input', {
@@ -1059,7 +1059,7 @@
           React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
             menuItems.filter(i => i.category === selectedCategory).map(item => React.createElement('div', { key: item.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-elevated)', marginBottom: '8px', borderRadius: '4px', border: editingItem?.id === item.id ? '1px solid var(--accent)' : '1px solid var(--border)' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
-                React.createElement('img', { src: item.image || 'assets/hero_food_collage.png', alt: item.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
+                React.createElement('img', { src: item.image || '/assets/hero_food_collage.png', alt: item.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
                 React.createElement('div', null,
                   React.createElement('strong', { style: { color: 'var(--text-main)' } }, item.name),
                   React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--accent)' } }, item.prices ? Object.entries(item.prices).map(([k, v]) => `${k}: Rs.${v}`).join(" | ") : 'Rs. 0')
