@@ -338,13 +338,16 @@
     async saveDeliverySettings(enabled, fee, maxOrders) {
       const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
       writeStore(DB_KEYS.SETTINGS, s);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
       if (supabaseClient) {
         try {
+          const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
             id: 1,
             delivery_charge_enabled: s.enabled,
             delivery_charge_amount: s.fee,
-            max_active_orders: s.maxOrders
+            max_active_orders: s.maxOrders,
+            discount_data: existing?.discount_data || null
           };
           const { error } = await supabaseClient.from('settings').upsert(payload);
           if (error) console.warn("Supabase saveDeliverySettings error:", error.message);
@@ -372,10 +375,15 @@
     }
     async saveDiscountSettings(data) {
       writeStore('habibi_discount_settings', data);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
       if (supabaseClient) {
         try {
+          const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
             id: 1,
+            delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
+            delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
+            max_active_orders: existing?.max_active_orders ?? 50,
             discount_data: data
           };
           const { error } = await supabaseClient.from('settings').upsert(payload);
@@ -682,12 +690,16 @@
     const [phone, setPhone] = useState('');
     const [address, setAddress] = useState('');
     const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150 });
+    const [discountRule, setDiscountRule] = useState(null);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [createdOrder, setCreatedOrder] = useState(null);
 
     useEffect(() => {
-      const updateSettings = () => repo.getDeliverySettings().then(setDeliverySettings);
+      const updateSettings = () => {
+        repo.getDeliverySettings().then(setDeliverySettings).catch(() => {});
+        repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
+      };
       updateSettings();
       window.addEventListener('storage_changed', updateSettings);
       window.addEventListener('storage', updateSettings);
@@ -697,8 +709,22 @@
       };
     }, []);
 
-    const deliveryFee = deliverySettings.enabled ? deliverySettings.fee : 0;
-    const grandTotal = cartSubtotal + deliveryFee;
+    let discountAmount = 0;
+    if (discountRule && discountRule.enabled) {
+      const val = parseFloat(discountRule.value) || 0;
+      if (discountRule.targetType === 'all') {
+        discountAmount = discountRule.type === 'percentage' ? Math.round(cartSubtotal * val / 100) : Math.min(cartSubtotal, val);
+      } else if (discountRule.targetType === 'category' && discountRule.targetCategory) {
+        const catTotal = cart.reduce((sum, item) => item.category === discountRule.targetCategory ? sum + (item.price * item.quantity) : sum, 0);
+        discountAmount = discountRule.type === 'percentage' ? Math.round(catTotal * val / 100) : Math.min(catTotal, val);
+      } else if (discountRule.targetType === 'item' && discountRule.targetItemId) {
+        const itemTotal = cart.reduce((sum, item) => String(item.id) === String(discountRule.targetItemId) ? sum + (item.price * item.quantity) : sum, 0);
+        discountAmount = discountRule.type === 'percentage' ? Math.round(itemTotal * val / 100) : Math.min(itemTotal, val);
+      }
+    }
+
+    const deliveryFee = deliverySettings.enabled ? (parseFloat(deliverySettings.fee) || 0) : 0;
+    const grandTotal = Math.max(0, cartSubtotal - discountAmount + deliveryFee);
 
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -791,6 +817,10 @@
               React.createElement('span', null, 'Subtotal:'),
               React.createElement('span', null, `Rs. ${cartSubtotal.toLocaleString()}`)
             ),
+            discountAmount > 0 ? React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '6px', color: '#4ade80', fontWeight: 'bold' } },
+              React.createElement('span', null, `Promo Discount (${discountRule?.label || 'Active Sale'}):`),
+              React.createElement('span', null, `-Rs. ${discountAmount.toLocaleString()}`)
+            ) : null,
             React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px' } },
               React.createElement('span', null, 'Delivery Charges:'),
               React.createElement('span', { style: { color: deliveryFee > 0 ? 'var(--accent)' : '#4caf50', fontWeight: 'bold' } }, deliveryFee > 0 ? `Rs. ${deliveryFee}` : 'FREE')

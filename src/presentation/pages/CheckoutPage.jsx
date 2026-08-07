@@ -33,6 +33,7 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150 });
+  const [discountRule, setDiscountRule] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [fieldErrors, setFieldErrors] = useState({}); // per-field inline errors
@@ -42,12 +43,32 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
   }, []);
 
   const loadSettings = async () => {
-    const s = await db.getDeliverySettings();
-    setDeliverySettings(s);
+    try {
+      const s = await db.getDeliverySettings();
+      setDeliverySettings(s);
+    } catch (e) {}
+    try {
+      const disc = await db.getDiscountSettings();
+      setDiscountRule(disc);
+    } catch (e) {}
   };
 
-  const deliveryFee = deliverySettings.enabled ? deliverySettings.fee : 0;
-  const grandTotal = cartSubtotal + deliveryFee;
+  let discountAmount = 0;
+  if (discountRule && discountRule.enabled) {
+    const val = parseFloat(discountRule.value) || 0;
+    if (discountRule.targetType === 'all') {
+      discountAmount = discountRule.type === 'percentage' ? Math.round(cartSubtotal * val / 100) : Math.min(cartSubtotal, val);
+    } else if (discountRule.targetType === 'category' && discountRule.targetCategory) {
+      const catTotal = cartItems.reduce((sum, item) => item.category === discountRule.targetCategory ? sum + (item.price * item.quantity) : sum, 0);
+      discountAmount = discountRule.type === 'percentage' ? Math.round(catTotal * val / 100) : Math.min(catTotal, val);
+    } else if (discountRule.targetType === 'item' && discountRule.targetItemId) {
+      const itemTotal = cartItems.reduce((sum, item) => String(item.id) === String(discountRule.targetItemId) ? sum + (item.price * item.quantity) : sum, 0);
+      discountAmount = discountRule.type === 'percentage' ? Math.round(itemTotal * val / 100) : Math.min(itemTotal, val);
+    }
+  }
+
+  const deliveryFee = deliverySettings.enabled ? (parseFloat(deliverySettings.fee) || 0) : 0;
+  const grandTotal = Math.max(0, cartSubtotal - discountAmount + deliveryFee);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -176,9 +197,15 @@ export const CheckoutPage = ({ setActivePage, setSelectedOrderId }) => {
               <span>Subtotal:</span>
               <span>Rs. {cartSubtotal.toLocaleString()}</span>
             </div>
+            {discountAmount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#4ade80', fontWeight: 'bold' }}>
+                <span>Promo Discount ({discountRule?.label || 'Active Sale'}):</span>
+                <span>-Rs. {discountAmount.toLocaleString()}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
               <span>Delivery Charges:</span>
-              <span style={{ color: deliveryFee > 0 ? 'var(--accent)' : '#4caf50' }}>
+              <span style={{ color: deliveryFee > 0 ? 'var(--accent)' : '#4caf50', fontWeight: 'bold' }}>
                 {deliveryFee > 0 ? `Rs. ${deliveryFee}` : 'FREE'}
               </span>
             </div>

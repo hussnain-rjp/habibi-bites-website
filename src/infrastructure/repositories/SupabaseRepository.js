@@ -272,11 +272,13 @@ export class SupabaseRepository extends IRepository {
 
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
+    const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
     const payload = {
       id: 1,
       delivery_charge_enabled: !!enabled,
       delivery_charge_amount: parseFloat(fee) || 0,
-      max_active_orders: parseInt(maxOrders) || 50
+      max_active_orders: parseInt(maxOrders) || 50,
+      discount_data: existing?.discount_data || null
     };
     const { data, error } = await this.client.from('settings').upsert(payload).select().single();
     if (error) throw new Error(error.message);
@@ -301,8 +303,12 @@ export class SupabaseRepository extends IRepository {
   async saveDiscountSettings(discountData) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
+    const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
     const payload = {
       id: 1,
+      delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
+      delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
+      max_active_orders: existing?.max_active_orders ?? 50,
       discount_data: discountData
     };
     const { error } = await this.client.from('settings').upsert(payload);
