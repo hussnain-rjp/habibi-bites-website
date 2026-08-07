@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../contexts/CartContext.jsx';
+import { useDb } from '../contexts/DbContext.jsx';
 import { CustomizationPricingStrategy } from '../../core/strategies/PricingStrategy.js';
+import { DiscountPricingStrategy } from '../../core/strategies/DiscountPricingStrategy.js';
 
 export const CustomizationModal = ({ item, onClose }) => {
   const { addToCart } = useCart();
+  const db = useDb();
 
   const [selectedSize, setSelectedSize] = useState('small');
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [quantity, setQuantity] = useState(1);
+  const [discountRule, setDiscountRule] = useState(null);
 
   const availableSizes = item?.prices ? Object.keys(item.prices) : ['default'];
 
@@ -15,12 +19,16 @@ export const CustomizationModal = ({ item, onClose }) => {
     if (availableSizes.length > 0) {
       setSelectedSize(availableSizes[0]);
     }
+    db.getDiscountSettings().then(setDiscountRule);
   }, [item]);
 
   if (!item) return null;
 
-  const basePrice = item.prices ? (item.prices[selectedSize] || Object.values(item.prices)[0] || 0) : 0;
+  const rawBasePrice = item.prices ? (item.prices[selectedSize] || Object.values(item.prices)[0] || 0) : 0;
   
+  const discInfo = DiscountPricingStrategy.calculateDiscount({ ...item, price: rawBasePrice }, discountRule);
+  const basePrice = discInfo.isDiscounted ? discInfo.finalPrice : rawBasePrice;
+
   const unitPrice = CustomizationPricingStrategy.calculateItemTotal(
     basePrice,
     selectedSize,
@@ -163,7 +171,14 @@ export const CustomizationModal = ({ item, onClose }) => {
         <div className="modal-footer" style={{ padding: '16px 20px', borderTop: '1px solid var(--border-light)', background: 'var(--bg-panel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total Price</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent)' }}>Rs. {totalPrice.toLocaleString()}</div>
+            {discInfo.isDiscounted ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Rs. {(CustomizationPricingStrategy.calculateItemTotal(rawBasePrice, selectedSize, null, selectedAddons) * quantity).toLocaleString()}</span>
+                <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#4ade80' }}>Rs. {totalPrice.toLocaleString()}</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent)' }}>Rs. {totalPrice.toLocaleString()}</div>
+            )}
           </div>
           <button className="btn btn-primary" onClick={handleAddToCart}>
             Add to Basket

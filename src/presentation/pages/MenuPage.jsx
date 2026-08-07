@@ -9,6 +9,7 @@ export const MenuPage = () => {
   const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState('');
   const [selectedCustomizeItem, setSelectedCustomizeItem] = useState(null);
+  const [discountRule, setDiscountRule] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -17,6 +18,9 @@ export const MenuPage = () => {
   const loadData = async () => {
     const fetchedItems = await db.getMenuItems();
     setItems(fetchedItems);
+
+    const fetchedDiscount = await db.getDiscountSettings();
+    setDiscountRule(fetchedDiscount);
 
     const defaultCategories = window.HABIBI_MENU?.categories || [
       { id: "pizza", name: "Pizzas" },
@@ -46,6 +50,20 @@ export const MenuPage = () => {
         <span className="section-subtitle">Habibi Bites Kitchen</span>
         <h1 className="section-title">Explore Our Online Menu</h1>
         <p style={{ color: 'var(--text-muted)' }}>Satisfy your cravings with our wide variety of fast food and hot desi delicacies.</p>
+
+        {discountRule && discountRule.enabled && (
+          <div style={{ marginTop: '16px', background: 'linear-gradient(135deg, rgba(245, 166, 35, 0.15), rgba(255, 192, 77, 0.25))', border: '1px solid var(--accent)', padding: '14px 20px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '1.8rem' }}>🎁</span>
+            <div>
+              <strong style={{ color: 'var(--accent)', fontSize: '1.05rem', display: 'block' }}>
+                {discountRule.label || 'Special Promotion Active!'}
+              </strong>
+              <span style={{ fontSize: '0.88rem', color: '#fff' }}>
+                Enjoy {discountRule.value}{discountRule.type === 'percentage' ? '%' : ' Rs.'} OFF on {discountRule.targetType === 'all' ? 'all items' : discountRule.targetType === 'category' ? `all ${discountRule.targetCategory}` : 'selected items'}! Discount auto-applied at checkout.
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="menu-layout">
@@ -78,6 +96,7 @@ export const MenuPage = () => {
                     <FoodCard
                       key={item.id}
                       item={item}
+                      discountRule={discountRule}
                       onCustomize={(itemToCustomize) => setSelectedCustomizeItem(itemToCustomize)}
                     />
                   ))}

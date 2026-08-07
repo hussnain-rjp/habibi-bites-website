@@ -21,7 +21,16 @@ export const AdminPage = () => {
   const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150, maxOrders: 50 });
   const [settingsFeeInput, setSettingsFeeInput] = useState(150);
   const [settingsMaxInput, setSettingsMaxInput] = useState(50);
-  const [settingsEnabledInput, setSettingsEnabledInput] = useState(false);
+  const [menuItemsList, setMenuItemsList] = useState([]);
+  const [discountState, setDiscountState] = useState({
+    enabled: false,
+    type: 'percentage',
+    value: 0,
+    targetType: 'all',
+    targetCategory: '',
+    targetItemId: '',
+    label: ''
+  });
 
   useEffect(() => {
     if (isAdmin) {
@@ -41,6 +50,19 @@ export const AdminPage = () => {
     setSettingsFeeInput(s.fee);
     setSettingsMaxInput(s.maxOrders);
     setSettingsEnabledInput(s.enabled);
+
+    const items = await db.getMenuItems();
+    setMenuItemsList(items);
+
+    const disc = await db.getDiscountSettings();
+    setDiscountState(disc);
+  };
+
+  const handleSaveDiscount = async (e) => {
+    e.preventDefault();
+    await db.saveDiscountSettings(discountState);
+    alert('Promotional discount settings saved successfully!');
+    loadDashboardData();
   };
 
   // Start a visible countdown when rate limited
@@ -358,7 +380,7 @@ export const AdminPage = () => {
         )}
       </div>
 
-      {/* Secondary Management Cards (Delivery Settings & Reviews Moderation) */}
+      {/* Secondary Management Cards (Delivery Settings, Discount Manager, & Reviews Moderation) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
         
         {/* Delivery Settings Card */}
@@ -368,15 +390,32 @@ export const AdminPage = () => {
           </h3>
 
           <form onSubmit={handleSaveSettings}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px', marginBottom: '16px', cursor: 'pointer', border: '1px solid var(--border-light)' }}>
-              <input 
-                type="checkbox"
-                checked={settingsEnabledInput}
-                onChange={(e) => setSettingsEnabledInput(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
-              />
-              <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: '#fff' }}>Enable Delivery Charge</span>
-            </label>
+            {/* Visual Toggle Switch */}
+            <div 
+              onClick={() => setSettingsEnabledInput(!settingsEnabledInput)}
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                padding: '12px 16px', 
+                background: settingsEnabledInput ? 'rgba(22, 163, 74, 0.15)' : 'var(--bg-elevated)', 
+                borderRadius: '10px', 
+                marginBottom: '16px', 
+                cursor: 'pointer', 
+                border: `2px solid ${settingsEnabledInput ? '#16a34a' : 'var(--border)'}`,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '1.2rem' }}>{settingsEnabledInput ? '🟢' : '⚪'}</span>
+                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: settingsEnabledInput ? '#4ade80' : '#fff' }}>
+                  {settingsEnabledInput ? 'Delivery Fee ENABLED' : 'Delivery Fee DISABLED'}
+                </span>
+              </div>
+              <div style={{ width: '48px', height: '26px', borderRadius: '20px', background: settingsEnabledInput ? '#16a34a' : '#4b5563', position: 'relative', transition: 'all 0.2s ease' }}>
+                <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: settingsEnabledInput ? '25px' : '3px', transition: 'all 0.2s ease' }} />
+              </div>
+            </div>
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Delivery Charge Amount (Rs.)</label>
@@ -400,6 +439,127 @@ export const AdminPage = () => {
 
             <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 700 }}>
               Save Settings 💾
+            </button>
+          </form>
+        </div>
+
+        {/* Promotional Discount Manager Card */}
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)' }}>
+          <h3 style={{ margin: '0 0 16px 0', color: 'var(--accent)', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🎁 Promotional Discount Manager</span>
+          </h3>
+
+          <form onSubmit={handleSaveDiscount}>
+            {/* Visual Toggle Switch */}
+            <div 
+              onClick={() => setDiscountState(prev => ({ ...prev, enabled: !prev.enabled }))}
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justify: 'space-between',
+                padding: '12px 16px', 
+                background: discountState.enabled ? 'rgba(22, 163, 74, 0.15)' : 'var(--bg-elevated)', 
+                borderRadius: '10px', 
+                marginBottom: '16px', 
+                cursor: 'pointer', 
+                border: `2px solid ${discountState.enabled ? '#16a34a' : 'var(--border)'}`,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '1.2rem' }}>{discountState.enabled ? '🟢' : '⚪'}</span>
+                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: discountState.enabled ? '#4ade80' : '#fff' }}>
+                  {discountState.enabled ? 'Store Discount is ACTIVE' : 'Store Discount is OFF'}
+                </span>
+              </div>
+              <div style={{ width: '48px', height: '26px', borderRadius: '20px', background: discountState.enabled ? '#16a34a' : '#4b5563', position: 'relative', transition: 'all 0.2s ease' }}>
+                <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: discountState.enabled ? '25px' : '3px', transition: 'all 0.2s ease' }} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Discount Type</label>
+              <select
+                value={discountState.type}
+                onChange={(e) => setDiscountState(prev => ({ ...prev, type: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
+              >
+                <option value="percentage">Percentage (%) OFF</option>
+                <option value="fixed">Fixed Amount (Rs.) OFF</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>
+                Discount Value ({discountState.type === 'percentage' ? '%' : 'Rs.'})
+              </label>
+              <input 
+                type="number" 
+                min="0"
+                value={discountState.value}
+                onChange={(e) => setDiscountState(prev => ({ ...prev, value: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Apply Discount To</label>
+              <select
+                value={discountState.targetType}
+                onChange={(e) => setDiscountState(prev => ({ ...prev, targetType: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
+              >
+                <option value="all">🌐 All Items (Store-Wide Discount)</option>
+                <option value="category">📁 Specific Food Category</option>
+                <option value="item">🍔 Specific Menu Item</option>
+              </select>
+            </div>
+
+            {discountState.targetType === 'category' && (
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Select Target Category</label>
+                <select
+                  value={discountState.targetCategory}
+                  onChange={(e) => setDiscountState(prev => ({ ...prev, targetCategory: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
+                >
+                  <option value="">-- Choose Category --</option>
+                  {[...new Set(menuItemsList.map(i => i.category).filter(Boolean))].map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {discountState.targetType === 'item' && (
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Select Target Item</label>
+                <select
+                  value={discountState.targetItemId}
+                  onChange={(e) => setDiscountState(prev => ({ ...prev, targetItemId: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
+                >
+                  <option value="">-- Choose Item --</option>
+                  {menuItemsList.map(i => (
+                    <option key={i.id} value={i.id}>{i.name} (Rs. {i.price})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>Custom Sale Banner Label (Optional)</label>
+              <input 
+                type="text"
+                placeholder="e.g. Weekend Flash Sale"
+                value={discountState.label}
+                onChange={(e) => setDiscountState(prev => ({ ...prev, label: e.target.value }))}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' }}
+              />
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 700 }}>
+              Save Discount Settings 🏷️
             </button>
           </form>
         </div>

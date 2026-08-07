@@ -208,9 +208,22 @@ export class LocalStorageRepository extends IRepository {
     };
   }
   async saveDeliverySettings(enabled, fee, maxOrders) {
-    const data = { enabled: !!enabled, fee: parseFloat(fee) || 0, maxOrders: parseInt(maxOrders) || 50 };
+    const current = readStore(DB_KEYS.SETTINGS) || {};
+    const data = { ...current, enabled: !!enabled, fee: parseFloat(fee) || 0, maxOrders: parseInt(maxOrders) || 50 };
     writeStore(DB_KEYS.SETTINGS, data);
     return data;
+  }
+
+  async getDiscountSettings() {
+    const raw = readStore(DB_KEYS.SETTINGS) || {};
+    return raw.discount_data || { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
+  }
+
+  async saveDiscountSettings(discountData) {
+    const current = readStore(DB_KEYS.SETTINGS) || {};
+    const data = { ...current, discount_data: discountData };
+    writeStore(DB_KEYS.SETTINGS, data);
+    return discountData;
   }
 
   // Auth

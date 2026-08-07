@@ -186,6 +186,11 @@
     async deleteReview(id) { const all = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => String(r.id) !== String(id)); writeStore(DB_KEYS.REVIEWS, all); }
     async getDeliverySettings() { return readStore(DB_KEYS.SETTINGS) || { enabled: false, fee: 150, maxOrders: 50 }; }
     async saveDeliverySettings(enabled, fee, maxOrders) { const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 }; writeStore(DB_KEYS.SETTINGS, s); return s; }
+    async getDiscountSettings() {
+      const s = readStore('habibi_discount_settings');
+      return s || { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
+    }
+    async saveDiscountSettings(data) { writeStore('habibi_discount_settings', data); return data; }
     async getAdminCredentials() {
       return readStore(DB_KEYS.ADMIN_CREDS) || { username: 'admin', password: 'habibibites123' };
     }
@@ -683,6 +688,15 @@
     const [maxInput, setMaxInput] = useState(50);
     const [enabledInput, setEnabledInput] = useState(false);
 
+    // Discount Settings
+    const [discEnabled, setDiscEnabled] = useState(false);
+    const [discType, setDiscType] = useState('percentage');
+    const [discValue, setDiscValue] = useState(0);
+    const [discTarget, setDiscTarget] = useState('all');
+    const [discCategory, setDiscCategory] = useState('');
+    const [discItemId, setDiscItemId] = useState('');
+    const [discLabel, setDiscLabel] = useState('');
+
     // Admin Account Settings State
     const [settingsMsg, setSettingsMsg] = useState({ type: '', text: '' });
     const [currentPassInput, setCurrentPassInput] = useState('');
@@ -725,6 +739,10 @@
       setMenuItems(await repo.getMenuItems());
       const s = await repo.getDeliverySettings();
       setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
+      const disc = await repo.getDiscountSettings();
+      setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
+      setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
+      setDiscItemId(disc.targetItemId || ''); setDiscLabel(disc.label || '');
       // Load restaurant info
       const info = await repo.getRestaurantInfo();
       setRestName(info.name || 'Habibi Bites');
@@ -854,6 +872,7 @@
           { id: 'menu_editor', label: '📖 Menu & Categories Editor' },
           { id: 'invoices', label: '📜 Invoice History' },
           { id: 'settings', label: '⚙️ Delivery & Capacity' },
+          { id: 'discount', label: '🎁 Discount Manager' },
           { id: 'reviews', label: '⭐ Moderation' },
           { id: 'admin_settings', label: '🔧 Admin Settings' }
         ].map(t => React.createElement('button', {
@@ -1097,6 +1116,98 @@
           ),
           React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Save Settings 💾')
         )
+      ) : null,
+
+      // TAB 4b: DISCOUNT MANAGER
+      adminTab === 'discount' ? React.createElement('div', { style: { maxWidth: '520px', background: 'var(--bg-panel)', padding: '24px', borderRadius: '10px', border: '1px solid var(--border)' } },
+        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0, marginBottom: '20px', fontSize: '1.2rem' } }, '🎁 Promotional Discount Manager'),
+
+        // TOGGLE SWITCH
+        React.createElement('div', {
+          onClick: () => setDiscEnabled(!discEnabled),
+          style: {
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '14px 18px', marginBottom: '20px', cursor: 'pointer', borderRadius: '10px',
+            background: discEnabled ? 'rgba(22,163,74,0.15)' : 'var(--bg-elevated)',
+            border: `2px solid ${discEnabled ? '#16a34a' : 'var(--border)'}`,
+            transition: 'all 0.2s ease'
+          }
+        },
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+            React.createElement('span', { style: { fontSize: '1.4rem' } }, discEnabled ? '🟢' : '⚪'),
+            React.createElement('span', { style: { fontWeight: 800, fontSize: '1rem', color: discEnabled ? '#4ade80' : '#fff' } },
+              discEnabled ? 'Store Discount is ACTIVE' : 'Store Discount is OFF'
+            )
+          ),
+          React.createElement('div', { style: { width: '52px', height: '28px', borderRadius: '20px', background: discEnabled ? '#16a34a' : '#4b5563', position: 'relative', transition: 'all 0.2s ease' } },
+            React.createElement('div', { style: { width: '22px', height: '22px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: discEnabled ? '27px' : '3px', transition: 'all 0.2s ease' } })
+          )
+        ),
+
+        // DISCOUNT TYPE
+        React.createElement('div', { style: { marginBottom: '16px' } },
+          React.createElement('label', { style: { display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' } }, 'Discount Type'),
+          React.createElement('select', { value: discType, onChange: e => setDiscType(e.target.value), style: { width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' } },
+            React.createElement('option', { value: 'percentage' }, 'Percentage (%) OFF'),
+            React.createElement('option', { value: 'fixed' }, 'Fixed Amount (Rs.) OFF')
+          )
+        ),
+
+        // DISCOUNT VALUE
+        React.createElement('div', { style: { marginBottom: '16px' } },
+          React.createElement('label', { style: { display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' } }, `Discount Value (${discType === 'percentage' ? '%' : 'Rs.'})`),
+          React.createElement('input', { type: 'number', min: '0', value: discValue, onChange: e => setDiscValue(e.target.value), style: { width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' } })
+        ),
+
+        // TARGET SCOPE
+        React.createElement('div', { style: { marginBottom: '16px' } },
+          React.createElement('label', { style: { display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' } }, 'Apply Discount To'),
+          React.createElement('select', { value: discTarget, onChange: e => setDiscTarget(e.target.value), style: { width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' } },
+            React.createElement('option', { value: 'all' }, '🌐 All Items (Store-Wide)'),
+            React.createElement('option', { value: 'category' }, '📁 Specific Category'),
+            React.createElement('option', { value: 'item' }, '🍔 Specific Menu Item')
+          )
+        ),
+
+        // CATEGORY PICKER
+        discTarget === 'category' ? React.createElement('div', { style: { marginBottom: '16px' } },
+          React.createElement('label', { style: { display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' } }, 'Select Category'),
+          React.createElement('select', { value: discCategory, onChange: e => setDiscCategory(e.target.value), style: { width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' } },
+            React.createElement('option', { value: '' }, '-- Choose Category --'),
+            ['pizza','special_pizza','burgers','wraps','desi','starters','pasta','drinks'].map(c =>
+              React.createElement('option', { key: c, value: c }, c.charAt(0).toUpperCase() + c.slice(1).replace('_', ' '))
+            )
+          )
+        ) : null,
+
+        // ITEM PICKER
+        discTarget === 'item' ? React.createElement('div', { style: { marginBottom: '16px' } },
+          React.createElement('label', { style: { display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' } }, 'Select Specific Item'),
+          React.createElement('select', { value: discItemId, onChange: e => setDiscItemId(e.target.value), style: { width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' } },
+            React.createElement('option', { value: '' }, '-- Choose Item --'),
+            menuItems.map(i =>
+              React.createElement('option', { key: i.id, value: String(i.id) }, `${i.name} (Rs. ${i.prices ? Object.values(i.prices)[0] : i.price || 0})`)
+            )
+          )
+        ) : null,
+
+        // BANNER LABEL
+        React.createElement('div', { style: { marginBottom: '24px' } },
+          React.createElement('label', { style: { display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' } }, 'Sale Banner Label (Optional)'),
+          React.createElement('input', { type: 'text', placeholder: 'e.g. Weekend Flash Sale', value: discLabel, onChange: e => setDiscLabel(e.target.value), style: { width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.95rem' } })
+        ),
+
+        // SAVE BUTTON
+        React.createElement('button', {
+          className: 'btn btn-primary',
+          style: { width: '100%', padding: '14px', justifyContent: 'center', fontWeight: 800, fontSize: '1rem' },
+          onClick: async () => {
+            await repo.saveDiscountSettings({ enabled: discEnabled, type: discType, value: parseFloat(discValue)||0, targetType: discTarget, targetCategory: discCategory, targetItemId: discItemId, label: discLabel });
+            alert('✅ Discount settings saved! Menu will update immediately.');
+            loadDashboard();
+          }
+        }, 'Save Discount Settings 🏷️')
+
       ) : null,
 
       // TAB 5: REVIEWS MODERATION
