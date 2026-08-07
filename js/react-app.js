@@ -318,13 +318,74 @@
     }
     async approveReview(id) { const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS; const idx = all.findIndex(r => String(r.id) === String(id)); if (idx !== -1) { all[idx].approved = true; writeStore(DB_KEYS.REVIEWS, all); } }
     async deleteReview(id) { const all = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => String(r.id) !== String(id)); writeStore(DB_KEYS.REVIEWS, all); }
-    async getDeliverySettings() { return readStore(DB_KEYS.SETTINGS) || { enabled: false, fee: 150, maxOrders: 50 }; }
-    async saveDeliverySettings(enabled, fee, maxOrders) { const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 }; writeStore(DB_KEYS.SETTINGS, s); return s; }
-    async getDiscountSettings() {
-      const s = readStore('habibi_discount_settings');
-      return s || { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
+    async getDeliverySettings() {
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+          if (!error && data) {
+            return {
+              enabled: !!data.delivery_charge_enabled,
+              fee: parseFloat(data.delivery_charge_amount) || 0,
+              maxOrders: parseInt(data.max_active_orders) || 50
+            };
+          }
+        } catch (err) {
+          console.warn("Supabase getDeliverySettings fallback to LocalStorage:", err);
+        }
+      }
+      return readStore(DB_KEYS.SETTINGS) || { enabled: false, fee: 150, maxOrders: 50 };
     }
-    async saveDiscountSettings(data) { writeStore('habibi_discount_settings', data); return data; }
+    async saveDeliverySettings(enabled, fee, maxOrders) {
+      const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
+      writeStore(DB_KEYS.SETTINGS, s);
+      if (supabaseClient) {
+        try {
+          const payload = {
+            id: 1,
+            delivery_charge_enabled: s.enabled,
+            delivery_charge_amount: s.fee,
+            max_active_orders: s.maxOrders
+          };
+          const { error } = await supabaseClient.from('settings').upsert(payload);
+          if (error) console.warn("Supabase saveDeliverySettings error:", error.message);
+        } catch (err) {
+          console.warn("Supabase saveDeliverySettings fallback:", err);
+        }
+      }
+      return s;
+    }
+    async getDiscountSettings() {
+      const defaultDiscount = { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+          if (!error && data && data.discount_data) {
+            const parsed = typeof data.discount_data === 'string' ? JSON.parse(data.discount_data) : data.discount_data;
+            return parsed || defaultDiscount;
+          }
+        } catch (err) {
+          console.warn("Supabase getDiscountSettings fallback to LocalStorage:", err);
+        }
+      }
+      const s = readStore('habibi_discount_settings');
+      return s || defaultDiscount;
+    }
+    async saveDiscountSettings(data) {
+      writeStore('habibi_discount_settings', data);
+      if (supabaseClient) {
+        try {
+          const payload = {
+            id: 1,
+            discount_data: data
+          };
+          const { error } = await supabaseClient.from('settings').upsert(payload);
+          if (error) console.warn("Supabase saveDiscountSettings error:", error.message);
+        } catch (err) {
+          console.warn("Supabase saveDiscountSettings fallback:", err);
+        }
+      }
+      return data;
+    }
     async getAdminCredentials() {
       return readStore(DB_KEYS.ADMIN_CREDS) || { username: 'admin', password: 'habibibites123' };
     }
@@ -748,6 +809,7 @@
     const [input, setInput] = useState(selectedOrderId || '');
     const [order, setOrder] = useState(null);
     const [error, setError] = useState('');
+    const [isLiveUpdated, setIsLiveUpdated] = useState(false);
 
     useEffect(() => {
       if (selectedOrderId) {
@@ -755,6 +817,50 @@
         repo.getOrderById(selectedOrderId).then(o => { if (o) setOrder(o); });
       }
     }, [selectedOrderId]);
+
+    // Real-time Supabase subscription for tracked order
+    useEffect(() => {
+      if (!order || !order.id || !supabaseClient) return;
+
+      const orderIdStr = String(order.id);
+      const channel = supabaseClient
+        .channel(`order-tracker-${orderIdStr}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'orders',
+            filter: `id=eq.${orderIdStr}`
+          },
+          (payload) => {
+            if (payload.new) {
+              setOrder(prev => {
+                if (!prev) return payload.new;
+                const newUpdates = typeof payload.new.updates === 'string' ? JSON.parse(payload.new.updates) : (payload.new.updates || prev.updates);
+                const newCustomer = typeof payload.new.customer === 'string' ? JSON.parse(payload.new.customer) : (payload.new.customer || prev.customer);
+                const newItems = typeof payload.new.items === 'string' ? JSON.parse(payload.new.items) : (payload.new.items || prev.items);
+                return {
+                  ...prev,
+                  status: payload.new.status || prev.status,
+                  updates: newUpdates,
+                  customer: newCustomer,
+                  items: newItems,
+                  total: payload.new.total ?? prev.total,
+                  deliveryFee: payload.new.delivery_fee ?? prev.deliveryFee
+                };
+              });
+              setIsLiveUpdated(true);
+              setTimeout(() => setIsLiveUpdated(false), 3000);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabaseClient.removeChannel(channel);
+      };
+    }, [order?.id]);
 
     const stages = [
       { key: "received", label: "Received", icon: "📝" },
@@ -791,14 +897,27 @@
       ),
       error ? React.createElement('div', { style: { textAlign: 'center', color: '#ff6b6b' } }, error) : null,
       order ? React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '30px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' } },
-        React.createElement('h2', { style: { color: 'var(--accent)', margin: 0 } }, `Order #${order.id}`),
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' } },
+          React.createElement('h2', { style: { color: 'var(--accent)', margin: 0 } }, `Order #${order.id}`),
+          React.createElement('span', { className: 'badge badge-accent', style: { fontSize: '0.75rem' } }, isLiveUpdated ? '✨ Status Updated Live!' : '🟢 Live Tracking Active')
+        ),
         React.createElement('div', { style: { margin: '30px 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: '10px', textAlign: 'center' } },
           stages.map((s, idx) => {
             const currentIdx = stages.findIndex(st => st.key === order.status);
             const isPassed = currentIdx >= idx;
-            return React.createElement('div', { key: s.key, style: { opacity: isPassed ? 1 : 0.4 } },
-              React.createElement('div', { style: { width: '44px', height: '44px', borderRadius: '50%', margin: '0 auto 8px auto', background: isPassed ? 'var(--primary)' : 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' } }, s.icon),
-              React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: 'bold' } }, s.label)
+            const isCurrent = currentIdx === idx;
+            return React.createElement('div', { key: s.key, style: { opacity: isPassed ? 1 : 0.4, transform: isCurrent && isLiveUpdated ? 'scale(1.12)' : 'scale(1)', transition: 'all 0.4s ease' } },
+              React.createElement('div', {
+                style: {
+                  width: '46px', height: '46px', borderRadius: '50%', margin: '0 auto 8px auto',
+                  background: isCurrent ? 'var(--accent)' : isPassed ? 'var(--primary)' : 'var(--bg-elevated)',
+                  color: isCurrent ? '#000' : '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem',
+                  boxShadow: isCurrent ? '0 0 16px var(--accent)' : 'none',
+                  transition: 'all 0.4s ease'
+                }
+              }, s.icon),
+              React.createElement('div', { style: { fontSize: '0.75rem', fontWeight: isCurrent ? 'bold' : 'normal', color: isCurrent ? 'var(--accent)' : 'var(--text-main)' } }, s.label)
             );
           })
         )

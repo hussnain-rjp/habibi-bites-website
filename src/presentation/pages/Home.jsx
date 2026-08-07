@@ -5,9 +5,11 @@ import { DealCard } from '../components/DealCard.jsx';
 export const Home = ({ setActivePage }) => {
   const db = useDb();
   const [featuredDeals, setFeaturedDeals] = useState([]);
+  const [discountRule, setDiscountRule] = useState(null);
 
   useEffect(() => {
     loadDeals();
+    db.getDiscountSettings().then(setDiscountRule).catch(() => {});
   }, []);
 
   const loadDeals = async () => {
@@ -18,6 +20,34 @@ export const Home = ({ setActivePage }) => {
 
   return (
     <main>
+      {/* Promotional Discount Banner */}
+      {discountRule && discountRule.enabled && (
+        <div style={{ 
+          background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', 
+          color: '#000', 
+          padding: '16px 24px', 
+          margin: '20px auto 0 auto', 
+          maxWidth: '1200px', 
+          borderRadius: 'var(--radius-sm)', 
+          textAlign: 'center', 
+          boxShadow: '0 8px 25px rgba(217, 83, 79, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px'
+        }}>
+          <span style={{ fontSize: '1.5rem' }}>🎁</span>
+          <div>
+            <div style={{ fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'uppercase' }}>
+              {discountRule.label || 'Special Promotion Active!'}
+            </div>
+            <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
+              Enjoy {discountRule.value}{discountRule.type === 'percentage' ? '%' : ' Rs.'} OFF on {discountRule.targetType === 'all' ? 'all items' : discountRule.targetType === 'category' ? `all ${discountRule.targetCategory}` : 'selected items'}!
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-container">

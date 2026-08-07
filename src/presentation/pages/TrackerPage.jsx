@@ -1,17 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { useDb } from '../contexts/DbContext.jsx';
+import { getSupabaseClient } from '../../infrastructure/supabase/client.js';
 
 export const TrackerPage = ({ selectedOrderId }) => {
   const db = useDb();
   const [searchInput, setSearchInput] = useState(selectedOrderId || '');
   const [activeOrder, setActiveOrder] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isLiveUpdated, setIsLiveUpdated] = useState(false);
 
   useEffect(() => {
     if (selectedOrderId) {
       handleSearch(selectedOrderId);
     }
   }, [selectedOrderId]);
+
+  // Real-time WebSocket subscription for active order
+  useEffect(() => {
+    if (!activeOrder || !activeOrder.id) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    const orderIdStr = String(activeOrder.id);
+    const channel = client.channel(`order-tracker-${orderIdStr}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${orderIdStr}`
+        },
+        (payload) => {
+          if (payload.new) {
+            setActiveOrder(prev => {
+              if (!prev) return payload.new;
+              const newUpdates = typeof payload.new.updates === 'string' ? JSON.parse(payload.new.updates) : (payload.new.updates || prev.updates);
+              const newCustomer = typeof payload.new.customer === 'string' ? JSON.parse(payload.new.customer) : (payload.new.customer || prev.customer);
+              const newItems = typeof payload.new.items === 'string' ? JSON.parse(payload.new.items) : (payload.new.items || prev.items);
+              return {
+                ...prev,
+                status: payload.new.status || prev.status,
+                updates: newUpdates,
+                customer: newCustomer,
+                items: newItems,
+                total: payload.new.total ?? prev.total,
+                deliveryFee: payload.new.delivery_fee ?? prev.deliveryFee
+              };
+            });
+            setIsLiveUpdated(true);
+            setTimeout(() => setIsLiveUpdated(false), 3000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [activeOrder?.id]);
 
   const handleSearch = async (queryToSearch) => {
     const query = queryToSearch || searchInput;
@@ -80,8 +127,13 @@ export const TrackerPage = ({ selectedOrderId }) => {
               <h2 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.5rem' }}>Order #{activeOrder.id}</h2>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Placed on {new Date(activeOrder.createdAt || Date.now()).toLocaleString()}</span>
             </div>
-            <div style={{ textTransform: 'uppercase', padding: '6px 16px', borderRadius: '20px', background: 'var(--primary)', color: '#fff', fontWeight: 'bold', fontSize: '0.85rem' }}>
-              {activeOrder.status}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="badge badge-accent" style={{ fontSize: '0.75rem' }}>
+                {isLiveUpdated ? '✨ Status Updated Live!' : '🟢 Live Tracking Active'}
+              </span>
+              <div style={{ textTransform: 'uppercase', padding: '6px 16px', borderRadius: '20px', background: 'var(--primary)', color: '#fff', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                {activeOrder.status}
+              </div>
             </div>
           </div>
 
@@ -90,7 +142,7 @@ export const TrackerPage = ({ selectedOrderId }) => {
               const isPassed = currentStageIdx >= idx;
               const isCurrent = currentStageIdx === idx;
               return (
-                <div key={stage.key} style={{ opacity: isPassed ? 1 : 0.4 }}>
+                <div key={stage.key} style={{ opacity: isPassed ? 1 : 0.4, transform: isCurrent && isLiveUpdated ? 'scale(1.15)' : 'scale(1)', transition: 'all 0.4s ease' }}>
                   <div style={{ 
                     width: '50px', 
                     height: '50px', 
@@ -102,7 +154,8 @@ export const TrackerPage = ({ selectedOrderId }) => {
                     alignItems: 'center', 
                     justifyContent: 'center', 
                     fontSize: '1.25rem',
-                    boxShadow: isCurrent ? '0 0 15px var(--accent)' : 'none'
+                    boxShadow: isCurrent ? '0 0 18px var(--accent)' : 'none',
+                    transition: 'all 0.4s ease'
                   }}>
                     {stage.icon}
                   </div>

@@ -286,13 +286,14 @@ export class SupabaseRepository extends IRepository {
   async getDiscountSettings() {
     const defaultDiscount = { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
     if (!this.client) return defaultDiscount;
-    checkRateLimit('discount', 'publicRead');
-    recordAttempt('discount', 'publicRead');
-    const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (error || !data || !data.discount_data) return defaultDiscount;
     try {
+      checkRateLimit('discount', 'publicRead');
+      recordAttempt('discount', 'publicRead');
+      const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
+      if (error || !data || !data.discount_data) return defaultDiscount;
       return typeof data.discount_data === 'string' ? JSON.parse(data.discount_data) : data.discount_data;
-    } catch {
+    } catch (e) {
+      console.warn("SupabaseRepository getDiscountSettings warning:", e.message);
       return defaultDiscount;
     }
   }
