@@ -492,7 +492,14 @@
     const [createdOrder, setCreatedOrder] = useState(null);
 
     useEffect(() => {
-      repo.getDeliverySettings().then(setDeliverySettings);
+      const updateSettings = () => repo.getDeliverySettings().then(setDeliverySettings);
+      updateSettings();
+      window.addEventListener('storage_changed', updateSettings);
+      window.addEventListener('storage', updateSettings);
+      return () => {
+        window.removeEventListener('storage_changed', updateSettings);
+        window.removeEventListener('storage', updateSettings);
+      };
     }, []);
 
     const deliveryFee = deliverySettings.enabled ? deliverySettings.fee : 0;
