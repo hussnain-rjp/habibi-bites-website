@@ -210,12 +210,13 @@
     async getMenuItems() {
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : null;
       let storeItems = readStore(DB_KEYS.MENU_ITEMS);
-      let localItems = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_MENU ? window.HABIBI_MENU.items : []));
+      let fallbackItems = (window.HABIBI_MENU && Array.isArray(window.HABIBI_MENU.items)) ? window.HABIBI_MENU.items : [];
+      let localItems = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : fallbackItems);
 
       if (supabaseClient) {
         try {
           const { data, error } = await supabaseClient.from('menu_items').select('*');
-          if (!error && data && data.length > 0) {
+          if (!error && Array.isArray(data) && data.length > 0) {
             const mapped = data.map(item => {
               let imagePath = item.image || '';
               if (imagePath.startsWith('data:') && imagePath.length > 250000) {
@@ -239,18 +240,20 @@
                 image: imagePath
               };
             });
-            if (typeof window !== 'undefined') {
-              window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-              window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
+            if (mapped.length > 0) {
+              if (typeof window !== 'undefined') {
+                window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+                window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
+              }
+              writeStore(DB_KEYS.MENU_ITEMS, mapped);
+              return mapped;
             }
-            writeStore(DB_KEYS.MENU_ITEMS, mapped);
-            return mapped;
           }
         } catch (err) {
           console.warn("Supabase getMenuItems fallback:", err);
         }
       }
-      return localItems;
+      return (localItems && localItems.length > 0) ? localItems : fallbackItems;
     }
     async saveMenuItem(item) {
       const items = (await readStore(DB_KEYS.MENU_ITEMS)) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
@@ -307,20 +310,25 @@
     async getDeals() {
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : null;
       let storeItems = readStore(DB_KEYS.DEALS);
-      let localDeals = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_DEALS ? window.HABIBI_DEALS : []));
+      let fallbackDeals = (window.HABIBI_DEALS && Array.isArray(window.HABIBI_DEALS)) ? window.HABIBI_DEALS : [];
+      let localDeals = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : fallbackDeals);
 
       if (supabaseClient) {
-        supabaseClient.from('deals').select('*').order('id', { ascending: true }).then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
+        try {
+          const { data, error } = await supabaseClient.from('deals').select('*').order('id', { ascending: true });
+          if (!error && Array.isArray(data) && data.length > 0) {
             if (typeof window !== 'undefined') {
               window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
               window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = data;
             }
             writeStore(DB_KEYS.DEALS, data);
+            return data;
           }
-        }).catch(err => console.warn("Supabase getDeals background sync:", err));
+        } catch (err) {
+          console.warn("Supabase getDeals fallback:", err);
+        }
       }
-      return localDeals;
+      return (localDeals && localDeals.length > 0) ? localDeals : fallbackDeals;
     }
 
     async saveDeal(deal) {
