@@ -31,14 +31,6 @@ export class SupabaseRepository extends IRepository {
       }
       return data.map(item => {
         let imagePath = item.image || '';
-        if (imagePath.startsWith('data:') && imagePath.length > 250000) {
-          const cat = (item.category || '').toLowerCase();
-          if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
-          else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
-          else if (cat.includes('desi') || cat.includes('karahi')) imagePath = 'assets/desi_karahi.png';
-          else if (cat.includes('starter') || cat.includes('fries')) imagePath = 'assets/starters_loaded_fries.png';
-          else imagePath = 'assets/hero_food_collage.png';
-        }
         let parsedPrices = item.prices;
         if (typeof item.prices === 'string') {
           try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }

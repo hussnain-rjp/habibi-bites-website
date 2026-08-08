@@ -218,15 +218,6 @@
           const { data, error } = await supabaseClient.from('menu_items').select('*');
           if (!error && Array.isArray(data) && data.length > 0) {
             const mapped = data.map(item => {
-              let imagePath = item.image || '';
-              if (imagePath.startsWith('data:') && imagePath.length > 250000) {
-                const cat = (item.category || '').toLowerCase();
-                if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
-                else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
-                else if (cat.includes('desi') || cat.includes('karahi')) imagePath = 'assets/desi_karahi.png';
-                else if (cat.includes('starter') || cat.includes('fries')) imagePath = 'assets/starters_loaded_fries.png';
-                else imagePath = 'assets/hero_food_collage.png';
-              }
               let parsedPrices = item.prices;
               if (typeof item.prices === 'string') {
                 try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
@@ -237,7 +228,7 @@
                 category: item.category,
                 description: item.description,
                 prices: parsedPrices,
-                image: imagePath
+                image: item.image || ''
               };
             });
             if (mapped.length > 0) {
@@ -268,13 +259,6 @@
 
       if (supabaseClient) {
         try {
-          let imagePath = item.image || '';
-          if (imagePath.startsWith('data:') && imagePath.length > 250000) {
-            const cat = (item.category || '').toLowerCase();
-            if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
-            else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
-            else imagePath = 'assets/hero_food_collage.png';
-          }
           const payload = {
             id: String(item.id),
             name: item.name,
