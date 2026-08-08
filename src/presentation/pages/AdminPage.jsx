@@ -7,7 +7,7 @@ import { sanitizeError } from '../../core/errors/ErrorHandler.js';
 
 export const AdminPage = () => {
   const db = useDb();
-  const { isAdmin, login, logout } = useAuth();
+  const { isAdmin, loading: isAuthLoading, login, logout } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -21,7 +21,11 @@ export const AdminPage = () => {
   const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150, maxOrders: 50 });
   const [settingsFeeInput, setSettingsFeeInput] = useState(150);
   const [settingsMaxInput, setSettingsMaxInput] = useState(50);
+  const [settingsEnabledInput, setSettingsEnabledInput] = useState(false);
   const [menuItemsList, setMenuItemsList] = useState([]);
+  const [menuSearchFilter, setMenuSearchFilter] = useState('');
+  const [editingMenuItem, setEditingMenuItem] = useState(null);
+  const [menuMsg, setMenuMsg] = useState({ type: '', text: '' });
   const [discountState, setDiscountState] = useState({
     enabled: false,
     type: 'percentage',
@@ -48,28 +52,34 @@ export const AdminPage = () => {
     }
   }, [isAdmin]);
 
+  // High-performance parallelized data loader
   const loadDashboardData = async (isInitial = false) => {
-    const fetchedOrders = await db.getOrders();
-    setOrders(fetchedOrders);
+    try {
+      const [fetchedOrders, fetchedReviews, items, s, disc, info] = await Promise.all([
+        db.getOrders(),
+        db.getPendingReviews(),
+        db.getMenuItems(),
+        isInitial ? db.getDeliverySettings() : Promise.resolve(null),
+        isInitial ? db.getDiscountSettings() : Promise.resolve(null),
+        isInitial ? db.getRestaurantInfo() : Promise.resolve(null)
+      ]);
 
-    const fetchedReviews = await db.getPendingReviews();
-    setPendingReviews(fetchedReviews);
+      setOrders(fetchedOrders || []);
+      setPendingReviews(fetchedReviews || []);
+      setMenuItemsList(items || []);
 
-    const items = await db.getMenuItems();
-    setMenuItemsList(items);
-
-    if (isInitial) {
-      const s = await db.getDeliverySettings();
-      setDeliverySettings(s);
-      setSettingsFeeInput(s.fee);
-      setSettingsMaxInput(s.maxOrders);
-      setSettingsEnabledInput(s.enabled);
-
-      const disc = await db.getDiscountSettings();
-      setDiscountState(disc);
-
-      const info = await db.getRestaurantInfo();
-      setRestInfoState(info);
+      if (isInitial) {
+        if (s) {
+          setDeliverySettings(s);
+          setSettingsFeeInput(s.fee);
+          setSettingsMaxInput(s.maxOrders);
+          setSettingsEnabledInput(s.enabled);
+        }
+        if (disc) setDiscountState(disc);
+        if (info) setRestInfoState(info);
+      }
+    } catch (e) {
+      console.error("Dashboard loading error:", e);
     }
   };
 
@@ -131,6 +141,38 @@ export const AdminPage = () => {
     loadDashboardData();
   };
 
+  const handleSaveMenuItem = async (e) => {
+    e.preventDefault();
+    if (!editingMenuItem || !editingMenuItem.name) return;
+    try {
+      if (db.saveMenuItem) {
+        await db.saveMenuItem(editingMenuItem);
+      } else if (editingMenuItem.id) {
+        await db.updateMenuItem(editingMenuItem);
+      } else {
+        await db.addMenuItem(editingMenuItem);
+      }
+      setMenuMsg({ type: 'success', text: `✅ Menu item "${editingMenuItem.name}" saved successfully!` });
+      setTimeout(() => setMenuMsg({ type: '', text: '' }), 4000);
+      setEditingMenuItem(null);
+      loadDashboardData();
+    } catch (err) {
+      setMenuMsg({ type: 'error', text: `⚠️ ${err.message || 'Failed to save menu item.'}` });
+    }
+  };
+
+  const handleDeleteMenuItem = async (itemId) => {
+    if (!window.confirm("Are you sure you want to delete this menu item?")) return;
+    try {
+      await db.deleteMenuItem(itemId);
+      setMenuMsg({ type: 'success', text: '✅ Menu item deleted successfully!' });
+      setTimeout(() => setMenuMsg({ type: '', text: '' }), 4000);
+      loadDashboardData();
+    } catch (err) {
+      setMenuMsg({ type: 'error', text: `⚠️ ${err.message || 'Failed to delete menu item.'}` });
+    }
+  };
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     await db.saveDeliverySettings(settingsEnabledInput, settingsFeeInput, settingsMaxInput);
@@ -153,6 +195,15 @@ export const AdminPage = () => {
   const deliveredOrders = orders.filter(o => o.status === 'delivered');
   const totalRevenue = deliveredOrders.reduce((acc, o) => acc + (parseFloat(o.total) || 0), 0);
   const activeCount = orders.filter(o => ['received', 'queue', 'cooking', 'packing', 'delivery'].includes(o.status)).length;
+
+  if (isAuthLoading) {
+    return (
+      <main className="section-container page-top-margin" style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🔒</div>
+        <h2 style={{ color: 'var(--accent)' }}>Verifying Administrator Credentials...</h2>
+      </main>
+    );
+  }
 
   if (!isAdmin) {
     return (
@@ -605,6 +656,103 @@ export const AdminPage = () => {
               </div>
             ))
           )}
+        </div>
+
+        {/* Quick Menu & Prices Manager Card */}
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)', gridColumn: '1 / -1' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🍕 Menu Items & Instant Price Control ({menuItemsList.length} items)</span>
+            </h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text"
+                placeholder="🔍 Search item or category..."
+                value={menuSearchFilter}
+                onChange={e => setMenuSearchFilter(e.target.value)}
+                style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.88rem', minWidth: '220px' }}
+              />
+              <button 
+                onClick={() => setEditingMenuItem({ id: `item_${Date.now()}`, name: '', category: 'burgers', description: '', prices: { single: 500 }, image: '' })}
+                className="btn btn-primary"
+                style={{ padding: '8px 16px', fontSize: '0.85rem', fontWeight: 800 }}
+              >
+                + Add New Item
+              </button>
+            </div>
+          </div>
+
+          {menuMsg.text && (
+            <div style={{ padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', background: menuMsg.type === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(76,175,80,0.15)', border: `1px solid ${menuMsg.type === 'error' ? '#ef4444' : '#4caf50'}`, color: menuMsg.type === 'error' ? '#fca5a5' : '#4caf50', fontWeight: 'bold' }}>
+              {menuMsg.text}
+            </div>
+          )}
+
+          {editingMenuItem && (
+            <form onSubmit={handleSaveMenuItem} style={{ background: 'var(--bg-elevated)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--accent)' }}>
+              <h4 style={{ margin: '0 0 14px 0', color: 'var(--accent)' }}>Editing: {editingMenuItem.name || 'New Item'}</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Item Name</label>
+                  <input type="text" required value={editingMenuItem.name || ''} onChange={e => setEditingMenuItem({ ...editingMenuItem, name: e.target.value })} style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Category</label>
+                  <input type="text" required value={editingMenuItem.category || ''} onChange={e => setEditingMenuItem({ ...editingMenuItem, category: e.target.value })} style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Default / Single Price (Rs.)</label>
+                  <input 
+                    type="number" 
+                    value={typeof editingMenuItem.prices === 'object' ? (editingMenuItem.prices?.single || editingMenuItem.prices?.regular || Object.values(editingMenuItem.prices)[0] || 0) : editingMenuItem.prices || 0} 
+                    onChange={e => setEditingMenuItem({ ...editingMenuItem, prices: { ...editingMenuItem.prices, single: Number(e.target.value) } })} 
+                    style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} 
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Description</label>
+                <input type="text" value={editingMenuItem.description || ''} onChange={e => setEditingMenuItem({ ...editingMenuItem, description: e.target.value })} style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setEditingMenuItem(null)} className="btn btn-outline" style={{ padding: '8px 16px' }}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ padding: '8px 20px', fontWeight: 800 }}>Save Item 💾</button>
+              </div>
+            </form>
+          )}
+
+          <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid var(--border-light)', borderRadius: '10px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '10px 14px' }}>Item Name</th>
+                  <th style={{ padding: '10px 14px' }}>Category</th>
+                  <th style={{ padding: '10px 14px' }}>Price(s)</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {menuItemsList
+                  .filter(i => !menuSearchFilter || i.name?.toLowerCase().includes(menuSearchFilter.toLowerCase()) || i.category?.toLowerCase().includes(menuSearchFilter.toLowerCase()))
+                  .map(item => {
+                    const priceDisplay = typeof item.prices === 'object' && item.prices !== null
+                      ? Object.entries(item.prices).map(([k, v]) => `${k.toUpperCase()}: Rs. ${v}`).join(', ')
+                      : `Rs. ${item.prices || item.price || 0}`;
+                    return (
+                      <tr key={item.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '10px 14px', fontWeight: 700, color: '#fff' }}>{item.name}</td>
+                        <td style={{ padding: '10px 14px', color: 'var(--accent)', textTransform: 'capitalize' }}>{item.category}</td>
+                        <td style={{ padding: '10px 14px', color: '#4ade80', fontWeight: 700 }}>{priceDisplay}</td>
+                        <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                          <button onClick={() => setEditingMenuItem(item)} style={{ padding: '4px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--accent)', cursor: 'pointer', marginRight: '6px', fontSize: '0.8rem', fontWeight: 700 }}>✏️ Edit</button>
+                          <button onClick={() => handleDeleteMenuItem(item.id)} style={{ padding: '4px 10px', background: 'rgba(220,38,38,0.2)', border: '1px solid #dc2626', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>🗑️ Delete</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Restaurant Info & Home Hero Settings Card */}

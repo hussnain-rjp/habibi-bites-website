@@ -322,6 +322,20 @@ export class SupabaseRepository extends IRepository {
     const { error } = await this.client.from('settings').upsert(payload);
     if (error) throw new Error(error.message);
     return discountData;
+  async saveMenuItem(item) {
+    checkRateLimit('admin_write', 'authenticatedAction');
+    recordAttempt('admin_write', 'authenticatedAction');
+    const payload = {
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      description: item.description || '',
+      prices: item.prices,
+      image: item.image || ''
+    };
+    const { data, error } = await this.client.from('menu_items').upsert(payload).select().single();
+    if (error) throw new Error(error.message);
+    return data || item;
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -354,8 +368,15 @@ export class SupabaseRepository extends IRepository {
       }
 
       const user = data.session.user;
-      const role = user?.app_metadata?.role || user?.user_metadata?.role;
-      const isVerifiedAdmin = role === 'admin' || user?.email === 'admin@habibibites.com' || user?.email === 'habibibites@gmail.com';
+      
+      // Server-side Role Check via admin_users table
+      const { data: adminRecord, error: adminErr } = await this.client
+        .from('admin_users')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const isVerifiedAdmin = !adminErr && adminRecord && adminRecord.role === 'admin';
 
       if (!isVerifiedAdmin) {
         await this.client.auth.signOut();
@@ -386,9 +407,15 @@ export class SupabaseRepository extends IRepository {
       const { data, error } = await this.client.auth.getSession();
       if (error || !data?.session?.user) return false;
       const user = data.session.user;
-      const role = user?.app_metadata?.role || user?.user_metadata?.role;
-      const isVerifiedAdmin = role === 'admin' || user?.email === 'admin@habibibites.com' || user?.email === 'habibibites@gmail.com';
-      return isVerifiedAdmin;
+
+      // Server-side Role Check via admin_users table
+      const { data: adminRecord, error: adminErr } = await this.client
+        .from('admin_users')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      return !adminErr && adminRecord && adminRecord.role === 'admin';
     } catch (e) {
       return false;
     }

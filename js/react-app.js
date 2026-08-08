@@ -576,10 +576,14 @@
             return false;
           }
           const user = data.session.user;
-          const role = user?.app_metadata?.role || user?.user_metadata?.role;
-          const isVerifiedAdmin = role === 'admin' || user?.email === 'admin@habibibites.com' || user?.email === 'habibibites@gmail.com';
+          const { data: adminRecord, error: adminErr } = await supabaseClient
+            .from('admin_users')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          const isVerifiedAdmin = !adminErr && adminRecord && adminRecord.role === 'admin';
           if (isVerifiedAdmin) {
-            writeStore(DB_KEYS.ADMIN, { u: user.email, time: Date.now(), token: data.session.access_token });
             if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
             return true;
           }
@@ -588,17 +592,6 @@
         } catch (err) {
           return false;
         }
-      }
-
-      // Offline mode (ONLY when Supabase client is not available)
-      const inputHash = await hashPassword(p);
-      const storedHash = readStore('habibi_admin_pwd_hash') || await hashPassword('habibibites123');
-      const meta = readStore('habibi_admin_meta') || { username: 'admin' };
-
-      if (u === meta.username && inputHash === storedHash) {
-        writeStore(DB_KEYS.ADMIN, { u, time: Date.now() });
-        if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
-        return true;
       }
       return false;
     }
@@ -631,15 +624,18 @@
           const { data, error } = await supabaseClient.auth.getSession();
           if (error || !data?.session?.user) return false;
           const user = data.session.user;
-          const role = user?.app_metadata?.role || user?.user_metadata?.role;
-          const isVerifiedAdmin = role === 'admin' || user?.email === 'admin@habibibites.com' || user?.email === 'habibibites@gmail.com';
-          return isVerifiedAdmin;
+          const { data: adminRecord, error: adminErr } = await supabaseClient
+            .from('admin_users')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          return !adminErr && adminRecord && adminRecord.role === 'admin';
         } catch (err) {
           return false;
         }
       }
-      const session = readStore(DB_KEYS.ADMIN);
-      return !!(session && session.u);
+      return false;
     }
     async getRestaurantInfo() {
       const defaultInfo = {

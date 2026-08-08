@@ -26,10 +26,9 @@ export function App() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '');
-      if (hash === 'admin') {
-        window.location.hash = 'home';
-        setActivePage('home');
-      } else if (hash && ['home', 'menu', 'deals', 'tracker', 'checkout', 'hb-manager-8924', 'reviews', 'contact'].includes(hash)) {
+      if (hash === 'admin' || hash === 'hb-manager-8924') {
+        setActivePage('admin');
+      } else if (hash && ['home', 'menu', 'deals', 'tracker', 'checkout', 'reviews', 'contact'].includes(hash)) {
         setActivePage(hash);
       }
     };
@@ -50,6 +49,7 @@ export function App() {
         return <CheckoutPage setActivePage={setActivePage} setSelectedOrderId={setSelectedOrderId} />;
       case 'tracker':
         return <TrackerPage selectedOrderId={selectedOrderId} />;
+      case 'admin':
       case 'hb-manager-8924':
         return <AdminPage />;
       case 'reviews':

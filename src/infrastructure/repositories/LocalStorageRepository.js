@@ -1,6 +1,7 @@
 import { IRepository } from '../../core/interfaces/IRepository';
 import { OrderFactory } from '../../core/factories/OrderFactory';
 import { DeliveryFeeStrategy } from '../../core/strategies/PricingStrategy';
+import { isSupabaseConfigured } from '../supabase/client';
 
 const DB_KEYS = {
   ORDERS: "habibi_bites_orders",
@@ -228,6 +229,9 @@ export class LocalStorageRepository extends IRepository {
 
   // Auth
   async loginAdmin(username, password) {
+    if (isSupabaseConfigured()) {
+      return false; // Local storage bypass is disabled when Supabase is active
+    }
     const localUser = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_LOCAL_ADMIN_USER) || 'admin';
     const localPass = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_LOCAL_ADMIN_PASSWORD) || '';
 
@@ -242,6 +246,9 @@ export class LocalStorageRepository extends IRepository {
     window.dispatchEvent(new Event("storage_changed"));
   }
   async isAdminLoggedIn() {
+    if (isSupabaseConfigured()) {
+      return false; // Force server-side auth via Supabase
+    }
     const session = readStore(DB_KEYS.ADMIN);
     return !!session;
   }
