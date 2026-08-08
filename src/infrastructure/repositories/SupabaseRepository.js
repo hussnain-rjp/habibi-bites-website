@@ -39,7 +39,11 @@ export class SupabaseRepository extends IRepository {
           else if (cat.includes('starter') || cat.includes('fries')) imagePath = 'assets/starters_loaded_fries.png';
           else imagePath = 'assets/hero_food_collage.png';
         }
-        return { ...item, image: imagePath };
+        let parsedPrices = item.prices;
+        if (typeof item.prices === 'string') {
+          try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
+        }
+        return { ...item, prices: parsedPrices, image: imagePath };
       });
     } catch (err) {
       return fallback;

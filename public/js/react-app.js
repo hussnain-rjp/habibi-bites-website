@@ -1930,7 +1930,16 @@
                 React.createElement('img', { src: item.image || '/assets/hero_food_collage.png', alt: item.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
                 React.createElement('div', null,
                   React.createElement('strong', { style: { color: 'var(--text-main)' } }, item.name),
-                  React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--accent)' } }, item.prices ? Object.entries(item.prices).map(([k, v]) => `${k}: Rs.${v}`).join(" | ") : 'Rs. 0')
+                  React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--accent)' } }, (() => {
+                    let pObj = item.prices;
+                    if (typeof pObj === 'string') {
+                      try { pObj = JSON.parse(pObj); } catch(e) { pObj = {}; }
+                    }
+                    if (pObj && typeof pObj === 'object' && pObj !== null) {
+                      return Object.entries(pObj).map(([k, v]) => `${k}: Rs.${v}`).join(" | ");
+                    }
+                    return 'Rs. 0';
+                  })())
                 )
               ),
               React.createElement('div', { style: { display: 'flex', gap: '6px' } },
