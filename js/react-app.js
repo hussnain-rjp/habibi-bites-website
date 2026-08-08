@@ -129,6 +129,11 @@
           window.dispatchEvent(new Event("storage_changed"));
         })
         .subscribe();
+      supabaseClient.channel('public:menu_items')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, () => {
+          window.dispatchEvent(new Event("storage_changed"));
+        })
+        .subscribe();
     } catch (e) {
       console.warn("Supabase init error:", e);
     }
@@ -166,17 +171,70 @@
       if (!readStore(DB_KEYS.MENU_ITEMS) && window.HABIBI_MENU) writeStore(DB_KEYS.MENU_ITEMS, window.HABIBI_MENU.items || []);
       if (!readStore(DB_KEYS.DEALS) && window.HABIBI_DEALS) writeStore(DB_KEYS.DEALS, window.HABIBI_DEALS || []);
     }
-    async getMenuItems() { return readStore(DB_KEYS.MENU_ITEMS) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []); }
+    async getMenuItems() {
+      let localItems = readStore(DB_KEYS.MENU_ITEMS) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('menu_items').select('*');
+          if (!error && data && data.length > 0) {
+            const mapped = data.map(item => ({
+              id: item.id,
+              name: item.name,
+              category: item.category,
+              description: item.description,
+              prices: typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices,
+              image: item.image
+            }));
+            writeStore(DB_KEYS.MENU_ITEMS, mapped);
+            return mapped;
+          }
+        } catch (err) {
+          console.warn("Supabase getMenuItems fallback:", err);
+        }
+      }
+      return localItems;
+    }
     async saveMenuItem(item) {
-      const items = await this.getMenuItems();
+      const items = await readStore(DB_KEYS.MENU_ITEMS) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
       const idx = items.findIndex(i => String(i.id) === String(item.id));
       if (idx !== -1) items[idx] = item; else items.push(item);
       writeStore(DB_KEYS.MENU_ITEMS, items);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const payload = {
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            description: item.description,
+            prices: item.prices,
+            image: item.image
+          };
+          const { error } = await supabaseClient.from('menu_items').upsert(payload);
+          if (error) {
+            console.warn("Supabase saveMenuItem fallback (stringified prices):", error.message);
+            await supabaseClient.from('menu_items').upsert({ ...payload, prices: JSON.stringify(item.prices) });
+          }
+        } catch (err) {
+          console.warn("Supabase saveMenuItem error:", err);
+        }
+      }
       return item;
     }
     async deleteMenuItem(id) {
-      const items = (await this.getMenuItems()).filter(i => String(i.id) !== String(id));
+      const items = (await readStore(DB_KEYS.MENU_ITEMS) || []).filter(i => String(i.id) !== String(id));
       writeStore(DB_KEYS.MENU_ITEMS, items);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const { error } = await supabaseClient.from('menu_items').delete().eq('id', id);
+          if (error) console.warn("Supabase deleteMenuItem error:", error.message);
+        } catch (err) {
+          console.warn("Supabase deleteMenuItem fallback:", err);
+        }
+      }
     }
     async getDeals() { return readStore(DB_KEYS.DEALS) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []); }
     async getOrders() {
