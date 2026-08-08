@@ -348,19 +348,27 @@ export class SupabaseRepository extends IRepository {
     try {
       const { data, error } = await this.client.auth.signInWithPassword({ email, password });
 
-      if (error) {
-        // Record failure for both per-device and per-account counters
+      if (error || !data?.session?.user) {
         recordAuthFailure(username);
-        throw new Error(error.message);
+        throw new Error(error?.message || 'Invalid credentials');
+      }
+
+      const user = data.session.user;
+      const role = user?.app_metadata?.role || user?.user_metadata?.role;
+      const isVerifiedAdmin = role === 'admin' || user?.email === 'admin@habibibites.com' || user?.email === 'habibibites@gmail.com';
+
+      if (!isVerifiedAdmin) {
+        await this.client.auth.signOut();
+        recordAuthFailure(username);
+        throw new Error('Access denied: Account does not have administrator privileges.');
       }
 
       // Clear all rate limit history on success — no lingering penalty
       recordAuthSuccess(username);
-      return !!data.session;
+      return true;
 
     } catch (err) {
       if (err instanceof RateLimitError) throw err;
-      // If it was a Supabase auth error (wrong password), record failure
       if (!err.message?.includes('rate limit')) {
         recordAuthFailure(username);
       }
@@ -374,8 +382,16 @@ export class SupabaseRepository extends IRepository {
 
   async isAdminLoggedIn() {
     if (!this.client) return false;
-    const { data } = await this.client.auth.getSession();
-    return !!data.session;
+    try {
+      const { data, error } = await this.client.auth.getSession();
+      if (error || !data?.session?.user) return false;
+      const user = data.session.user;
+      const role = user?.app_metadata?.role || user?.user_metadata?.role;
+      const isVerifiedAdmin = role === 'admin' || user?.email === 'admin@habibibites.com' || user?.email === 'habibibites@gmail.com';
+      return isVerifiedAdmin;
+    } catch (e) {
+      return false;
+    }
   }
 
   // ── Restaurant Info & Branding ──────────────────────────────────────────────
