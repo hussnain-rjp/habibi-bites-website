@@ -1975,9 +1975,20 @@
           React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
             menuItems.filter(i => {
               if (!selectedCategory || selectedCategory === 'all') return true;
+              const specialPizzaIds = [
+                'pizza_beef_bonanza', 'pizza_arabic', 'pizza_4in1', 'pizza_donner',
+                'pizza_lasagna', 'pizza_cheese_steak', 'pizza_crown_crust',
+                'pizza_behri_kabab', 'pizza_cheese_stuff', 'pizza_kabab_stuff', 'pizza_habibi_grill'
+              ];
+              if (selectedCategory === 'special_pizza') {
+                return i.category === 'special_pizza' || i.type === 'pizza_special' || specialPizzaIds.includes(String(i.id));
+              }
+              if (selectedCategory === 'pizza') {
+                return (i.category === 'pizza' || i.category === 'pizzas') && i.type !== 'pizza_special' && !specialPizzaIds.includes(String(i.id));
+              }
               const cat = String(i.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
               const sel = String(selectedCategory || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              return cat.includes(sel) || sel.includes(cat);
+              return cat === sel || cat.includes(sel);
             }).map(item => React.createElement('div', { key: item.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-elevated)', marginBottom: '8px', borderRadius: '4px', border: editingItem?.id === item.id ? '1px solid var(--accent)' : '1px solid var(--border)' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
                 React.createElement('img', { src: item.image || '/assets/hero_food_collage.png', alt: item.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
