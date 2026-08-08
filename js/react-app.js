@@ -208,12 +208,12 @@
       if (!readStore(DB_KEYS.DEALS) && window.HABIBI_DEALS) writeStore(DB_KEYS.DEALS, window.HABIBI_DEALS || []);
     }
     async getMenuItems() {
-      let storeItems = readStore(DB_KEYS.MENU_ITEMS);
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : null;
+      let storeItems = readStore(DB_KEYS.MENU_ITEMS);
       let localItems = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_MENU ? window.HABIBI_MENU.items : []));
+
       if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('menu_items').select('*');
+        supabaseClient.from('menu_items').select('*').then(({ data, error }) => {
           if (!error && data && data.length > 0) {
             const mapped = data.map(item => {
               let imagePath = item.image || '';
@@ -239,11 +239,8 @@
               };
             });
             writeStore(DB_KEYS.MENU_ITEMS, mapped);
-            return mapped;
           }
-        } catch (err) {
-          console.warn("Supabase getMenuItems fallback:", err);
-        }
+        }).catch(err => console.warn("Supabase getMenuItems background sync:", err));
       }
       return localItems;
     }
@@ -300,16 +297,13 @@
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : null;
       let storeItems = readStore(DB_KEYS.DEALS);
       let localDeals = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_DEALS ? window.HABIBI_DEALS : []));
+
       if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('deals').select('*').order('id', { ascending: true });
+        supabaseClient.from('deals').select('*').order('id', { ascending: true }).then(({ data, error }) => {
           if (!error && data && data.length > 0) {
             writeStore(DB_KEYS.DEALS, data);
-            return data;
           }
-        } catch (err) {
-          console.warn("Supabase getDeals fallback:", err);
-        }
+        }).catch(err => console.warn("Supabase getDeals background sync:", err));
       }
       return localDeals;
     }
