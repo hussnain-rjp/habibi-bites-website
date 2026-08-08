@@ -31,7 +31,7 @@ export class SupabaseRepository extends IRepository {
       }
       return data.map(item => {
         let imagePath = item.image || '';
-        if (imagePath.startsWith('data:') && imagePath.length > 300) {
+        if (imagePath.startsWith('data:') && imagePath.length > 250000) {
           const cat = (item.category || '').toLowerCase();
           if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
           else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
