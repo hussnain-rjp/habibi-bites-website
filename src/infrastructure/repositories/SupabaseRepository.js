@@ -243,6 +243,14 @@ export class SupabaseRepository extends IRepository {
     const { error } = await this.client.from('reviews').delete().eq('id', id);
     if (error) throw new Error(error.message);
     return true;
+  async clearAllOrders() {
+    checkRateLimit('admin_write', 'authenticatedAction');
+    recordAttempt('admin_write', 'authenticatedAction');
+    if (this.client) {
+      const { error } = await this.client.from('orders').delete().neq('id', '_none_');
+      if (error) console.warn("SupabaseRepository clearAllOrders warning:", error.message);
+    }
+    return [];
   }
 
   // ── Settings ──────────────────────────────────────────────────────────────

@@ -312,6 +312,19 @@
       }
       return orders[idx];
     }
+    async clearAllOrders() {
+      writeStore(DB_KEYS.ORDERS, []);
+      localStorage.removeItem(DB_KEYS.LAST_ORDER_ID);
+      if (supabaseClient) {
+        try {
+          const { error } = await supabaseClient.from('orders').delete().neq('id', '_none_');
+          if (error) console.warn("Supabase clearAllOrders error:", error.message);
+        } catch (err) {
+          console.warn("Supabase clearAllOrders fallback:", err);
+        }
+      }
+      return [];
+    }
     async getReviews() { return (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => r.approved); }
     async getPendingReviews() { return (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => !r.approved); }
     async addReview(name, rating, comment) {
@@ -1480,7 +1493,8 @@
                   { id: 'wraps', label: 'Wraps & Rolls' },
                   { id: 'desi', label: 'Desi & Broast' },
                   { id: 'starters', label: 'Starters' },
-                  { id: 'pasta', label: 'Pastas' }
+                  { id: 'pasta', label: 'Pastas' },
+                  { id: 'drinks', label: 'Chill Side & Desserts' }
                 ].map(c => React.createElement('option', { key: c.id, value: c.id }, c.label))
               )
             ),
@@ -1524,7 +1538,7 @@
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' } },
             React.createElement('h3', { style: { color: 'var(--accent)', margin: 0 } }, 'Menu Catalog'),
             React.createElement('select', { value: selectedCategory, onChange: e => setSelectedCategory(e.target.value), style: { padding: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } },
-              ['pizza', 'special_pizza', 'burgers', 'wraps', 'desi', 'starters', 'pasta'].map(c => React.createElement('option', { key: c, value: c }, c.toUpperCase()))
+              ['pizza', 'special_pizza', 'burgers', 'wraps', 'desi', 'starters', 'pasta', 'drinks'].map(c => React.createElement('option', { key: c, value: c }, c.toUpperCase()))
             )
           ),
           React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
@@ -1857,12 +1871,11 @@
                     disabled: dangerConfirmText !== 'DELETE',
                     onClick: async () => {
                       if (dangerConfirmText !== 'DELETE') return;
-                      localStorage.removeItem(DB_KEYS.ORDERS);
-                      localStorage.removeItem(DB_KEYS.LAST_ORDER_ID);
+                      await repo.clearAllOrders();
                       setDangerModalStep(0);
                       setDangerConfirmText('');
-                      await loadDashboard();
-                      setSettingsMsg({ type: 'success', text: '✅ All order history has been permanently cleared.' });
+                      await loadDashboard(true);
+                      setSettingsMsg({ type: 'success', text: '✅ All order history has been permanently cleared from database and storage.' });
                       setTimeout(() => setSettingsMsg({ type: '', text: '' }), 5000);
                     },
                     style: {
