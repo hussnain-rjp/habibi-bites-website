@@ -238,6 +238,10 @@
                 image: imagePath
               };
             });
+            if (typeof window !== 'undefined') {
+              window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+              window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
+            }
             writeStore(DB_KEYS.MENU_ITEMS, mapped);
           }
         }).catch(err => console.warn("Supabase getMenuItems background sync:", err));
@@ -301,6 +305,10 @@
       if (supabaseClient) {
         supabaseClient.from('deals').select('*').order('id', { ascending: true }).then(({ data, error }) => {
           if (!error && data && data.length > 0) {
+            if (typeof window !== 'undefined') {
+              window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+              window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = data;
+            }
             writeStore(DB_KEYS.DEALS, data);
           }
         }).catch(err => console.warn("Supabase getDeals background sync:", err));
@@ -390,12 +398,6 @@
                 createdAt: o.created_at || o.createdAt || new Date().toISOString(),
                 updates: upds
               };
-            });
-            const ids = new Set(mapped.map(m => String(m.id).toUpperCase()));
-            localOrders.forEach(lo => {
-              if (lo && lo.id && !ids.has(String(lo.id).toUpperCase())) {
-                mapped.push(lo);
-              }
             });
             writeStore(DB_KEYS.ORDERS, mapped);
             return mapped;
