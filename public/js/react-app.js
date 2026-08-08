@@ -1434,7 +1434,7 @@
     };
     const [pendingReviews, setPendingReviews] = useState([]);
     const [menuItems, setMenuItems] = useState([]);
-    const [selectedCategory, setSelectedCategory] = useState('pizza');
+    const [selectedCategory, setSelectedCategory] = useState('all');
     
     // Menu Editor State (Add & Edit Existing)
     const [editingItem, setEditingItem] = useState(null);
@@ -1950,10 +1950,10 @@
           ),
           React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
             menuItems.filter(i => {
-              if (selectedCategory === 'all') return true;
-              const cat = (i.category || '').toLowerCase().trim();
-              const sel = (selectedCategory || '').toLowerCase().trim();
-              return cat === sel || cat.includes(sel) || sel.includes(cat);
+              if (!selectedCategory || selectedCategory === 'all') return true;
+              const cat = String(i.category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              const sel = String(selectedCategory || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              return cat.includes(sel) || sel.includes(cat);
             }).map(item => React.createElement('div', { key: item.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-elevated)', marginBottom: '8px', borderRadius: '4px', border: editingItem?.id === item.id ? '1px solid var(--accent)' : '1px solid var(--border)' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
                 React.createElement('img', { src: item.image || '/assets/hero_food_collage.png', alt: item.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
