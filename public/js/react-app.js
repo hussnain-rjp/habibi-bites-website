@@ -425,11 +425,28 @@
       if (activeCount >= settings.maxOrders) {
         throw new Error("Kitchen is at full capacity right now. Please try again shortly.");
       }
-      let lastId = parseInt(readStore(DB_KEYS.LAST_ORDER_ID)) || 5103;
-      lastId += 1;
-      writeStore(DB_KEYS.LAST_ORDER_ID, lastId);
+
+      // Get next ID from Supabase to avoid collisions across devices
+      let nextId = 5104;
+      if (supabaseClient) {
+        try {
+          const { data } = await supabaseClient
+            .from('orders')
+            .select('id')
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (data && data.length > 0 && data[0].id) {
+            const parsed = parseInt(String(data[0].id).replace('HB-', ''));
+            if (!isNaN(parsed)) nextId = parsed + 1;
+          }
+        } catch (e) {}
+      }
+      const localLast = parseInt(readStore(DB_KEYS.LAST_ORDER_ID)) || 5103;
+      if (nextId <= localLast) nextId = localLast + 1;
+      writeStore(DB_KEYS.LAST_ORDER_ID, nextId);
+
       const newOrder = {
-        id: `HB-${lastId}`,
+        id: `HB-${nextId}`,
         customer,
         items,
         total: parseFloat(total),
@@ -1667,31 +1684,29 @@
       }
       prevOrdersRef.current = latestOrders;
 
-      setPendingReviews(await repo.getPendingReviews());
-      setMenuItems(await repo.getMenuItems());
-      setDealsList(await repo.getDeals());
-
       if (isInitial) {
+        setPendingReviews(await repo.getPendingReviews());
+        setMenuItems(await repo.getMenuItems());
+        setDealsList(await repo.getDeals());
+
         const s = await repo.getDeliverySettings();
         setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
         const disc = await repo.getDiscountSettings();
         setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
         setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
         setDiscItemId(disc.targetItemId || ''); setDiscLabel(disc.label || '');
-      }
 
-      // Load restaurant info
-      const info = await repo.getRestaurantInfo();
-      setRestName(info.name || 'Habibi Bites');
-      setRestTagline(info.tagline || 'Fast Food & Traditional Kitchen');
-      setRestAddress(info.address || 'Qila Didar Singh, Gujranwala');
-      setRestPhone(info.phone || '0302-4411700');
-      setRestEmail(info.email || 'habibibites@gmail.com');
-      setRestHeroImage(info.heroImage || '');
-      setRestHeroText(info.heroText || '');
-      // Pre-fill username field
-      const creds = await repo.getAdminCredentials();
-      setNewUsernameInput(creds.username || 'admin');
+        const info = await repo.getRestaurantInfo();
+        setRestName(info.name || 'Habibi Bites');
+        setRestTagline(info.tagline || 'Fast Food & Traditional Kitchen');
+        setRestAddress(info.address || 'Qila Didar Singh, Gujranwala');
+        setRestPhone(info.phone || '0302-4411700');
+        setRestEmail(info.email || 'habibibites@gmail.com');
+        setRestHeroImage(info.heroImage || '');
+        setRestHeroText(info.heroText || '');
+        const creds = await repo.getAdminCredentials();
+        setNewUsernameInput(creds.username || 'admin');
+      }
     };
 
     const handleFileUpload = (e) => {
