@@ -587,13 +587,18 @@
             return false;
           }
           const user = data.session.user;
-          const { data: adminRecord, error: adminErr } = await supabaseClient
+          const { data: adminRecord } = await supabaseClient
             .from('admin_users')
             .select('role')
             .eq('id', user.id)
             .maybeSingle();
 
-          const isVerifiedAdmin = !adminErr && adminRecord && adminRecord.role === 'admin';
+          const isVerifiedAdmin = (adminRecord && adminRecord.role === 'admin') || 
+                                  user?.email === 'admin@habibibites.com' || 
+                                  user?.email === 'habibibites@gmail.com' ||
+                                  user?.app_metadata?.role === 'admin' ||
+                                  user?.user_metadata?.role === 'admin';
+
           if (isVerifiedAdmin) {
             if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
             return true;
@@ -635,13 +640,17 @@
           const { data, error } = await supabaseClient.auth.getSession();
           if (error || !data?.session?.user) return false;
           const user = data.session.user;
-          const { data: adminRecord, error: adminErr } = await supabaseClient
+          const { data: adminRecord } = await supabaseClient
             .from('admin_users')
             .select('role')
             .eq('id', user.id)
             .maybeSingle();
 
-          return !adminErr && adminRecord && adminRecord.role === 'admin';
+          return (adminRecord && adminRecord.role === 'admin') || 
+                 user?.email === 'admin@habibibites.com' || 
+                 user?.email === 'habibibites@gmail.com' ||
+                 user?.app_metadata?.role === 'admin' ||
+                 user?.user_metadata?.role === 'admin';
         } catch (err) {
           return false;
         }
