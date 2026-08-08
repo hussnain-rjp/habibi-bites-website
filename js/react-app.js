@@ -105,10 +105,20 @@
     { id: 4, name: "Usman Ghani", rating: 5, comment: "Special Deal 7 is super value. The large pizza, burgers and fries easily fed my family.", date: "2026-08-02", approved: true }
   ];
 
+  if (typeof window !== 'undefined') {
+    window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+  }
   function readStore(key) {
+    if (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE && window.__HABIBI_MEMORY_STORE[key]) {
+      return window.__HABIBI_MEMORY_STORE[key];
+    }
     try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : null; } catch (e) { return null; }
   }
   function writeStore(key, data) {
+    if (typeof window !== 'undefined') {
+      window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+      window.__HABIBI_MEMORY_STORE[key] = data;
+    }
     try { localStorage.setItem(key, JSON.stringify(data)); window.dispatchEvent(new Event("storage_changed")); } catch (e) {}
   }
 
@@ -199,7 +209,8 @@
     }
     async getMenuItems() {
       let storeItems = readStore(DB_KEYS.MENU_ITEMS);
-      let localItems = (storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
+      let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : null;
+      let localItems = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_MENU ? window.HABIBI_MENU.items : []));
       if (supabaseClient) {
         try {
           const { data, error } = await supabaseClient.from('menu_items').select('*');
@@ -1583,7 +1594,7 @@
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const maxDim = 400;
+            const maxDim = 300;
             let width = img.width;
             let height = img.height;
             if (width > maxDim || height > maxDim) {
@@ -1599,7 +1610,7 @@
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            const compressed = canvas.toDataURL('image/jpeg', 0.70);
+            const compressed = canvas.toDataURL('image/jpeg', 0.55);
             setItemImg(compressed);
           };
           img.src = reader.result;
