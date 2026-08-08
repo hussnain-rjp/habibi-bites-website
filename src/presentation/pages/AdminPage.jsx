@@ -31,6 +31,16 @@ export const AdminPage = () => {
     targetItemId: '',
     label: ''
   });
+  const [restInfoState, setRestInfoState] = useState({
+    name: 'Habibi Bites',
+    tagline: 'Fast Food & Traditional Kitchen',
+    address: 'Qila Didar Singh, Gujranwala',
+    phone: '0302-4411700',
+    email: 'habibibites@gmail.com',
+    heroImage: '',
+    heroText: ''
+  });
+  const [restMsg, setRestMsg] = useState({ type: '', text: '' });
 
   useEffect(() => {
     if (isAdmin) {
@@ -57,6 +67,9 @@ export const AdminPage = () => {
 
       const disc = await db.getDiscountSettings();
       setDiscountState(disc);
+
+      const info = await db.getRestaurantInfo();
+      setRestInfoState(info);
     }
   };
 
@@ -592,6 +605,73 @@ export const AdminPage = () => {
               </div>
             ))
           )}
+        </div>
+
+        {/* Restaurant Info & Home Hero Settings Card */}
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)' }}>
+          <h3 style={{ margin: '0 0 16px 0', color: 'var(--accent)', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🏪 Restaurant Info & Home Hero Settings</span>
+          </h3>
+
+          {restMsg.text && (
+            <div style={{ padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', background: 'rgba(76,175,80,0.15)', border: '1px solid #4caf50', color: '#4caf50', fontWeight: 'bold' }}>
+              {restMsg.text}
+            </div>
+          )}
+
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            await db.saveRestaurantInfo(restInfoState);
+            setRestMsg({ type: 'success', text: '✅ Restaurant info & Home Hero settings saved!' });
+            setTimeout(() => setRestMsg({ type: '', text: '' }), 4000);
+          }}>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-main)' }}>Restaurant Name</label>
+              <input type="text" value={restInfoState.name} onChange={e => setRestInfoState(prev => ({ ...prev, name: e.target.value }))} style={{ width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-main)' }}>Tagline / Slogan</label>
+              <input type="text" value={restInfoState.tagline} onChange={e => setRestInfoState(prev => ({ ...prev, tagline: e.target.value }))} style={{ width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-main)' }}>Full Address</label>
+              <input type="text" value={restInfoState.address} onChange={e => setRestInfoState(prev => ({ ...prev, address: e.target.value }))} style={{ width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '4px', color: 'var(--accent)' }}>📞 Phone Number (Editable)</label>
+              <input type="text" value={restInfoState.phone} onChange={e => setRestInfoState(prev => ({ ...prev, phone: e.target.value }))} placeholder="e.g. 0302-4411700" style={{ width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px' }} />
+            </div>
+
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-main)' }}>Email Address</label>
+              <input type="text" value={restInfoState.email} onChange={e => setRestInfoState(prev => ({ ...prev, email: e.target.value }))} style={{ width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px' }} />
+            </div>
+
+            <div style={{ marginBottom: '14px', borderTop: '1px dashed var(--border)', paddingTop: '14px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '4px', color: 'var(--accent)' }}>🖼️ Home Page Hero Banner Image (Upload or URL)</label>
+              <input type="file" accept="image/*" onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => setRestInfoState(prev => ({ ...prev, heroImage: reader.result }));
+                  reader.readAsDataURL(file);
+                }
+              }} style={{ width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px', marginBottom: '8px' }} />
+              <input type="text" value={restInfoState.heroImage} onChange={e => setRestInfoState(prev => ({ ...prev, heroImage: e.target.value }))} placeholder="Or paste image URL" style={{ width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px' }} />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, marginBottom: '4px', color: 'var(--accent)' }}>📝 Home Page Hero Paragraph Description</label>
+              <textarea rows={3} value={restInfoState.heroText} onChange={e => setRestInfoState(prev => ({ ...prev, heroText: e.target.value }))} placeholder="e.g. Experience the ultimate flavor fusion..." style={{ width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px' }} />
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 700 }}>
+              Save Restaurant & Home Settings 💾
+            </button>
+          </form>
         </div>
 
       </div>

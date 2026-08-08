@@ -6,10 +6,14 @@ export const Home = ({ setActivePage }) => {
   const db = useDb();
   const [featuredDeals, setFeaturedDeals] = useState([]);
   const [discountRule, setDiscountRule] = useState(null);
+  const [restInfo, setRestInfo] = useState(null);
 
   useEffect(() => {
     loadDeals();
-    const loadDisc = () => db.getDiscountSettings().then(setDiscountRule).catch(() => {});
+    const loadDisc = () => {
+      db.getDiscountSettings().then(setDiscountRule).catch(() => {});
+      db.getRestaurantInfo().then(setRestInfo).catch(() => {});
+    };
     loadDisc();
     window.addEventListener('storage_changed', loadDisc);
     return () => window.removeEventListener('storage_changed', loadDisc);
@@ -21,6 +25,9 @@ export const Home = ({ setActivePage }) => {
     setFeaturedDeals(selected.length > 0 ? selected : deals.slice(0, 4));
   };
 
+  const heroDescription = restInfo?.heroText || 'Experience the ultimate flavor fusion. From brick-oven pizzas and double-patty beef burgers to clay-pot handis and crispy golden broast, we satisfy every craving.';
+  const heroImageSrc = restInfo?.heroImage || '/assets/logo.png';
+
   return (
     <main>
       {/* Hero Section */}
@@ -29,7 +36,7 @@ export const Home = ({ setActivePage }) => {
           <div className="hero-content">
             <span className="hero-tag">🔥 Now Delivering in Qila Didar Singh</span>
             <h1 className="hero-title">Delicious Food <br/>Served with <span>Passion</span></h1>
-            <p className="hero-desc">Experience the ultimate flavor fusion. From brick-oven pizzas and double-patty beef burgers to clay-pot handis and crispy golden broast, we satisfy every craving.</p>
+            <p className="hero-desc">{heroDescription}</p>
             <div className="hero-actions">
               <button onClick={() => setActivePage('menu')} className="btn btn-primary">Order Online Now ➔</button>
               <button onClick={() => setActivePage('deals')} className="btn btn-outline">Explore Hot Deals ⚡</button>
@@ -40,9 +47,11 @@ export const Home = ({ setActivePage }) => {
             <div className="hero-image-glow"></div>
             <div className="hero-image-container" style={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', transform: 'rotate(1deg)' }}>
               <img 
-                src="assets/logo.png" 
+                src={heroImageSrc} 
                 alt="Habibi Bites Restaurant Logo" 
-                style={{ width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'contain', borderRadius: '50%', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#ffffff', padding: '10px' }}
+                loading="eager"
+                decoding="async"
+                style={{ width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '24px', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#ffffff', padding: '6px' }}
               />
             </div>
           </div>

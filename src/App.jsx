@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { DbProvider } from './presentation/contexts/DbContext.jsx';
 import { AuthProvider } from './presentation/contexts/AuthContext.jsx';
 import { CartProvider } from './presentation/contexts/CartContext.jsx';
@@ -11,10 +11,12 @@ import { Home } from './presentation/pages/Home.jsx';
 import { MenuPage } from './presentation/pages/MenuPage.jsx';
 import { DealsPage } from './presentation/pages/DealsPage.jsx';
 import { CheckoutPage } from './presentation/pages/CheckoutPage.jsx';
-import { TrackerPage } from './presentation/pages/TrackerPage.jsx';
-import { AdminPage } from './presentation/pages/AdminPage.jsx';
 import { ReviewsPage } from './presentation/pages/ReviewsPage.jsx';
 import { ContactPage } from './presentation/pages/ContactPage.jsx';
+
+// Code-split heavy routes not needed on initial home page load
+const TrackerPage = lazy(() => import('./presentation/pages/TrackerPage.jsx').then(m => ({ default: m.TrackerPage })));
+const AdminPage = lazy(() => import('./presentation/pages/AdminPage.jsx').then(m => ({ default: m.AdminPage })));
 
 export function App() {
   const [activePage, setActivePage] = useState('home');
@@ -66,7 +68,9 @@ export function App() {
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <Navbar activePage={activePage} setActivePage={setActivePage} />
             <div style={{ flex: 1 }}>
-              {renderCurrentPage()}
+              <Suspense fallback={<div className="section-container" style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading view...</div>}>
+                {renderCurrentPage()}
+              </Suspense>
             </div>
             <CartDrawer setActivePage={setActivePage} />
             <Footer setActivePage={setActivePage} />

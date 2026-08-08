@@ -377,4 +377,47 @@ export class SupabaseRepository extends IRepository {
     const { data } = await this.client.auth.getSession();
     return !!data.session;
   }
+
+  // ── Restaurant Info & Branding ──────────────────────────────────────────────
+
+  async getRestaurantInfo() {
+    const defaultInfo = {
+      name: 'Habibi Bites',
+      tagline: 'Fast Food & Traditional Kitchen',
+      address: 'Qila Didar Singh, Gujranwala',
+      phone: '0302-4411700',
+      email: 'habibibites@gmail.com',
+      heroImage: '',
+      heroText: ''
+    };
+    if (!this.client) return defaultInfo;
+    try {
+      const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
+      if (!error && data && data.restaurant_info) {
+        const parsed = typeof data.restaurant_info === 'string' ? JSON.parse(data.restaurant_info) : data.restaurant_info;
+        if (parsed) return { ...defaultInfo, ...parsed };
+      }
+    } catch (e) {
+      console.warn("SupabaseRepository getRestaurantInfo error:", e);
+    }
+    return defaultInfo;
+  }
+
+  async saveRestaurantInfo(info) {
+    checkRateLimit('admin_write', 'authenticatedAction');
+    recordAttempt('admin_write', 'authenticatedAction');
+    if (!this.client) return info;
+    const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
+    const payload = {
+      id: 1,
+      delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
+      delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
+      max_active_orders: existing?.max_active_orders ?? 50,
+      discount_data: existing?.discount_data || null,
+      restaurant_info: info
+    };
+    const { error } = await this.client.from('settings').upsert(payload);
+    if (error) throw new Error(error.message);
+    return info;
+  }
 }

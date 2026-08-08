@@ -134,6 +134,11 @@
           window.dispatchEvent(new Event("storage_changed"));
         })
         .subscribe();
+      supabaseClient.channel('public:reviews')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, () => {
+          window.dispatchEvent(new Event("storage_changed"));
+        })
+        .subscribe();
     } catch (e) {
       console.warn("Supabase init error:", e);
     }
@@ -383,17 +388,83 @@
       }
       return [];
     }
-    async getReviews() { return (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => r.approved); }
-    async getPendingReviews() { return (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => !r.approved); }
+    async getReviews() {
+      let localRevs = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => r.approved);
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('reviews').select('*').eq('approved', true).order('date', { ascending: false });
+          if (!error && data) return data;
+        } catch (err) {
+          console.warn("Supabase getReviews fallback:", err);
+        }
+      }
+      return localRevs;
+    }
+    async getPendingReviews() {
+      let localRevs = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => !r.approved);
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('reviews').select('*').eq('approved', false).order('date', { ascending: false });
+          if (!error && data) return data;
+        } catch (err) {
+          console.warn("Supabase getPendingReviews fallback:", err);
+        }
+      }
+      return localRevs;
+    }
     async addReview(name, rating, comment) {
       const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS;
       const rev = { id: Date.now(), name, rating: parseInt(rating)||5, comment, date: new Date().toISOString().split('T')[0], approved: false };
       all.unshift(rev);
       writeStore(DB_KEYS.REVIEWS, all);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('reviews').insert([{
+            name: rev.name,
+            rating: rev.rating,
+            comment: rev.comment,
+            date: rev.date,
+            approved: false
+          }]).select().single();
+          if (error) console.warn("Supabase addReview error:", error.message);
+          else if (data) return data;
+        } catch (err) {
+          console.warn("Supabase addReview fallback:", err);
+        }
+      }
       return rev;
     }
-    async approveReview(id) { const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS; const idx = all.findIndex(r => String(r.id) === String(id)); if (idx !== -1) { all[idx].approved = true; writeStore(DB_KEYS.REVIEWS, all); } }
-    async deleteReview(id) { const all = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => String(r.id) !== String(id)); writeStore(DB_KEYS.REVIEWS, all); }
+    async approveReview(id) {
+      const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS;
+      const idx = all.findIndex(r => String(r.id) === String(id));
+      if (idx !== -1) { all[idx].approved = true; writeStore(DB_KEYS.REVIEWS, all); }
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const { error } = await supabaseClient.from('reviews').update({ approved: true }).eq('id', id);
+          if (error) console.warn("Supabase approveReview error:", error.message);
+        } catch (err) {
+          console.warn("Supabase approveReview fallback:", err);
+        }
+      }
+    }
+    async deleteReview(id) {
+      const all = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => String(r.id) !== String(id));
+      writeStore(DB_KEYS.REVIEWS, all);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const { error } = await supabaseClient.from('reviews').delete().eq('id', id);
+          if (error) console.warn("Supabase deleteReview error:", error.message);
+        } catch (err) {
+          console.warn("Supabase deleteReview fallback:", err);
+        }
+      }
+    }
     async getDeliverySettings() {
       if (supabaseClient) {
         try {
@@ -488,16 +559,57 @@
       if (session) writeStore(DB_KEYS.ADMIN, { ...session, u: newUsername });
     }
     async getRestaurantInfo() {
-      return readStore(DB_KEYS.RESTAURANT_INFO) || {
+      const defaultInfo = {
         name: 'Habibi Bites',
         tagline: 'Fast Food & Traditional Kitchen',
         address: 'Qila Didar Singh, Gujranwala',
-        phone: '0300-1234567',
-        email: 'habibibites@gmail.com'
+        phone: '0302-4411700',
+        email: 'habibibites@gmail.com',
+        heroImage: '',
+        heroText: ''
       };
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+          if (!error && data && data.restaurant_info) {
+            const parsed = typeof data.restaurant_info === 'string' ? JSON.parse(data.restaurant_info) : data.restaurant_info;
+            if (parsed) {
+              writeStore(DB_KEYS.RESTAURANT_INFO, parsed);
+              return { ...defaultInfo, ...parsed };
+            }
+          }
+        } catch (err) {
+          console.warn("Supabase getRestaurantInfo fallback:", err);
+        }
+      }
+      const local = readStore(DB_KEYS.RESTAURANT_INFO);
+      return local ? { ...defaultInfo, ...local } : defaultInfo;
     }
     async saveRestaurantInfo(info) {
       writeStore(DB_KEYS.RESTAURANT_INFO, info);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+          const payload = {
+            id: 1,
+            delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
+            delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
+            max_active_orders: existing?.max_active_orders ?? 50,
+            discount_data: existing?.discount_data || null,
+            restaurant_info: info
+          };
+          const { error } = await supabaseClient.from('settings').upsert(payload);
+          if (error) {
+            console.warn("Supabase saveRestaurantInfo error (trying stringified):", error.message);
+            await supabaseClient.from('settings').upsert({ ...payload, restaurant_info: JSON.stringify(info) });
+          }
+        } catch (err) {
+          console.warn("Supabase saveRestaurantInfo fallback:", err);
+        }
+      }
+      return info;
     }
     async logoutAdmin() { localStorage.removeItem(DB_KEYS.ADMIN); }
     async isAdminLoggedIn() { return !!readStore(DB_KEYS.ADMIN); }
@@ -623,15 +735,22 @@
 
   function HomePageView({ setActivePage, addToCart }) {
     const [discountRule, setDiscountRule] = useState(null);
+    const [restInfo, setRestInfo] = useState(null);
     useEffect(() => {
-      const loadDisc = () => repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
-      loadDisc();
-      window.addEventListener('storage_changed', loadDisc);
-      return () => window.removeEventListener('storage_changed', loadDisc);
+      const loadData = () => {
+        repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
+        repo.getRestaurantInfo().then(setRestInfo).catch(() => {});
+      };
+      loadData();
+      window.addEventListener('storage_changed', loadData);
+      return () => window.removeEventListener('storage_changed', loadData);
     }, []);
 
     const deals = window.HABIBI_DEALS || [];
     const featured = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
+
+    const heroDesc = restInfo?.heroText || 'Experience the ultimate flavor fusion. From brick-oven pizzas and double-patty beef burgers to clay-pot handis and crispy golden broast, we satisfy every craving.';
+    const heroImg = restInfo?.heroImage || '/assets/logo.png';
 
     return React.createElement('main', null,
       React.createElement('section', { className: 'hero-section' },
@@ -639,7 +758,7 @@
           React.createElement('div', { className: 'hero-content' },
             React.createElement('span', { className: 'hero-tag' }, '🔥 Now Delivering in Qila Didar Singh'),
             React.createElement('h1', { className: 'hero-title' }, 'Delicious Food ', React.createElement('br'), 'Served with ', React.createElement('span', null, 'Passion')),
-            React.createElement('p', { className: 'hero-desc' }, 'Experience the ultimate flavor fusion. From brick-oven pizzas and double-patty beef burgers to clay-pot handis and crispy golden broast, we satisfy every craving.'),
+            React.createElement('p', { className: 'hero-desc' }, heroDesc),
             React.createElement('div', { className: 'hero-actions' },
               React.createElement('button', { className: 'btn btn-primary', onClick: () => setActivePage('menu') }, 'Order Online Now ➔'),
               React.createElement('button', { className: 'btn btn-outline', onClick: () => setActivePage('deals'), style: { marginLeft: '10px' } }, 'Explore Hot Deals ⚡')
@@ -648,7 +767,7 @@
           React.createElement('div', { className: 'hero-image-wrapper' },
             React.createElement('div', { className: 'hero-image-glow' }),
             React.createElement('div', { className: 'hero-image-container', style: { position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' } },
-              React.createElement('img', { src: '/assets/logo.png', alt: 'Habibi Bites Logo', loading: 'eager', decoding: 'async', style: { width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'contain', borderRadius: '50%', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#fff', padding: '10px' } })
+              React.createElement('img', { src: heroImg, alt: 'Habibi Bites Showcase', loading: 'eager', decoding: 'async', style: { width: '100%', maxWidth: '420px', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '24px', boxShadow: '0 10px 30px rgba(217, 164, 65, 0.3), 0 0 25px rgba(217, 83, 79, 0.25)', border: '4px solid var(--accent)', background: '#fff', padding: '6px' } })
             )
           )
         )
@@ -1200,8 +1319,11 @@
     const [restName, setRestName] = useState('Habibi Bites');
     const [restTagline, setRestTagline] = useState('Fast Food & Traditional Kitchen');
     const [restAddress, setRestAddress] = useState('Qila Didar Singh, Gujranwala');
-    const [restPhone, setRestPhone] = useState('0300-1234567');
+    const [restPhone, setRestPhone] = useState('0302-4411700');
     const [restEmail, setRestEmail] = useState('habibibites@gmail.com');
+    const [restHeroImage, setRestHeroImage] = useState('');
+    const [restHeroText, setRestHeroText] = useState('');
+    const [invoiceMonthFilter, setInvoiceMonthFilter] = useState('all');
     // Danger Zone Confirmation Modal State
     const [dangerModalStep, setDangerModalStep] = useState(0); // 0=closed 1=step1 2=step2
     const [dangerConfirmText, setDangerConfirmText] = useState('');
@@ -1269,8 +1391,10 @@
       setRestName(info.name || 'Habibi Bites');
       setRestTagline(info.tagline || 'Fast Food & Traditional Kitchen');
       setRestAddress(info.address || 'Qila Didar Singh, Gujranwala');
-      setRestPhone(info.phone || '0300-1234567');
+      setRestPhone(info.phone || '0302-4411700');
       setRestEmail(info.email || 'habibibites@gmail.com');
+      setRestHeroImage(info.heroImage || '');
+      setRestHeroText(info.heroText || '');
       // Pre-fill username field
       const creds = await repo.getAdminCredentials();
       setNewUsernameInput(creds.username || 'admin');
@@ -1619,7 +1743,28 @@
 
       // TAB 3: INVOICE HISTORY
       adminTab === 'invoices' ? React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
-        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, '📜 Complete Invoice History'),
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', margin: 0 } }, '📜 Complete Invoice History'),
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+            React.createElement('span', { style: { fontSize: '0.85rem', color: 'var(--text-muted)' } }, 'Filter by Month:'),
+            React.createElement('select', {
+              value: invoiceMonthFilter,
+              onChange: e => setInvoiceMonthFilter(e.target.value),
+              style: { padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', cursor: 'pointer' }
+            },
+              React.createElement('option', { value: 'all' }, '🗓️ All Months & Years'),
+              Array.from(new Set(orders.map(o => {
+                const d = new Date(o.createdAt || Date.now());
+                if (isNaN(d.getTime())) return null;
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+              }).filter(Boolean))).sort().reverse().map(m => {
+                const [yr, mo] = m.split('-');
+                const monthName = new Date(parseInt(yr), parseInt(mo) - 1, 1).toLocaleString('default', { month: 'long' });
+                return React.createElement('option', { key: m, value: m }, `${monthName} ${yr}`);
+              })
+            )
+          )
+        ),
         React.createElement('div', { style: { overflowX: 'auto' } },
           React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' } },
             React.createElement('thead', null,
@@ -1633,14 +1778,20 @@
               )
             ),
             React.createElement('tbody', null,
-              orders.map(o => React.createElement('tr', { key: o.id, style: { borderBottom: '1px solid var(--border-light)' } },
+              orders.filter(o => {
+                if (invoiceMonthFilter === 'all') return true;
+                const d = new Date(o.createdAt || Date.now());
+                if (isNaN(d.getTime())) return true;
+                const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                return period === invoiceMonthFilter;
+              }).map(o => React.createElement('tr', { key: o.id, style: { borderBottom: '1px solid var(--border-light)' } },
                 React.createElement('td', { style: { padding: '10px', fontWeight: 'bold', color: 'var(--accent)' } }, o.id),
                 React.createElement('td', { style: { padding: '10px', fontSize: '0.8rem' } }, new Date(o.createdAt || Date.now()).toLocaleDateString()),
                 React.createElement('td', { style: { padding: '10px' } }, o.customer?.name),
                 React.createElement('td', { style: { padding: '10px', fontWeight: 'bold' } }, `Rs. ${o.total}`),
                 React.createElement('td', { style: { padding: '10px' } }, o.status),
                 React.createElement('td', { style: { padding: '10px' } },
-                  React.createElement('button', { onClick: () => handlePrintInvoice(o), style: { padding: '6px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', cursor: 'pointer', borderRadius: '4px' } }, '🖨️ View/Print Receipt')
+                  React.createElement('button', { className: 'btn btn-outline', onClick: () => handlePrintInvoice(o), style: { padding: '4px 10px', fontSize: '0.8rem' } }, '🖨️ Receipt')
                 )
               ))
             )
@@ -1959,8 +2110,16 @@
           React.createElement('form', {
             onSubmit: async (e) => {
               e.preventDefault();
-              await repo.saveRestaurantInfo({ name: restName, tagline: restTagline, address: restAddress, phone: restPhone, email: restEmail });
-              setSettingsMsg({ type: 'success', text: '✅ Restaurant info saved! Receipts will reflect the new details.' });
+              await repo.saveRestaurantInfo({
+                name: restName,
+                tagline: restTagline,
+                address: restAddress,
+                phone: restPhone,
+                email: restEmail,
+                heroImage: restHeroImage,
+                heroText: restHeroText
+              });
+              setSettingsMsg({ type: 'success', text: '✅ Restaurant info & Home Hero settings saved successfully!' });
               setTimeout(() => setSettingsMsg({ type: '', text: '' }), 4000);
             }
           },
@@ -1968,7 +2127,7 @@
               { label: '🏠 Restaurant Name', value: restName, setter: setRestName, placeholder: 'e.g. Habibi Bites' },
               { label: '💬 Tagline / Slogan', value: restTagline, setter: setRestTagline, placeholder: 'e.g. Fast Food & Traditional Kitchen' },
               { label: '📍 Full Address', value: restAddress, setter: setRestAddress, placeholder: 'e.g. Qila Didar Singh, Gujranwala' },
-              { label: '📞 Phone Number', value: restPhone, setter: setRestPhone, placeholder: 'e.g. 0300-1234567' },
+              { label: '📞 Phone Number (Editable)', value: restPhone, setter: setRestPhone, placeholder: 'e.g. 0302-4411700' },
               { label: '📧 Email Address', value: restEmail, setter: setRestEmail, placeholder: 'e.g. info@habibibites.com' }
             ].map(field =>
               React.createElement('div', { key: field.label, style: { marginBottom: '12px' } },
@@ -1981,7 +2140,43 @@
                 })
               )
             ),
-            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center', marginTop: '8px' } }, '💾 Save Restaurant Info'),
+
+            React.createElement('div', { style: { marginBottom: '14px', borderTop: '1px dashed var(--border)', paddingTop: '14px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '5px', color: 'var(--accent)' } }, '🖼️ Home Page Hero Banner Image (Upload or URL)'),
+              React.createElement('input', {
+                type: 'file',
+                accept: 'image/*',
+                onChange: (e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setRestHeroImage(reader.result);
+                    reader.readAsDataURL(file);
+                  }
+                },
+                style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', marginBottom: '8px' }
+              }),
+              React.createElement('input', {
+                type: 'text',
+                value: restHeroImage,
+                onChange: e => setRestHeroImage(e.target.value),
+                placeholder: 'Or paste image URL (e.g. /assets/hero_food_collage.png)',
+                style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }
+              })
+            ),
+
+            React.createElement('div', { style: { marginBottom: '16px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '5px', color: 'var(--accent)' } }, '📝 Home Page Hero Paragraph Description'),
+              React.createElement('textarea', {
+                rows: 3,
+                value: restHeroText,
+                onChange: e => setRestHeroText(e.target.value),
+                placeholder: 'e.g. Experience the ultimate flavor fusion. From brick-oven pizzas to crispy golden broast...',
+                style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }
+              })
+            ),
+
+            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center', marginTop: '8px' } }, '💾 Save Restaurant & Home Settings'),
 
             // Info Preview Card
             React.createElement('div', { style: { marginTop: '18px', padding: '14px', background: 'var(--bg-elevated)', borderRadius: '6px', border: '1px solid var(--border-light)', fontFamily: 'monospace', fontSize: '0.8rem', lineHeight: '1.7' } },
