@@ -1079,9 +1079,25 @@
       load();
       window.addEventListener('storage_changed', load);
       window.addEventListener('storage', load);
+
+      // Realtime sync: reload discount/delivery when settings change on any device
+      let settingsChannel = null;
+      if (supabaseClient) {
+        try {
+          settingsChannel = supabaseClient.channel('menu-settings-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
+              repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
+            })
+            .subscribe();
+        } catch(e) {}
+      }
+
       return () => {
         window.removeEventListener('storage_changed', load);
         window.removeEventListener('storage', load);
+        if (settingsChannel && supabaseClient) {
+          try { supabaseClient.removeChannel(settingsChannel); } catch(e) {}
+        }
       };
     }, []);
 
@@ -1244,9 +1260,25 @@
       updateSettings();
       window.addEventListener('storage_changed', updateSettings);
       window.addEventListener('storage', updateSettings);
+
+      // Realtime sync: reload when admin changes delivery/discount from any device
+      let settingsChannel = null;
+      if (supabaseClient) {
+        try {
+          settingsChannel = supabaseClient.channel('checkout-settings-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
+              updateSettings();
+            })
+            .subscribe();
+        } catch(e) {}
+      }
+
       return () => {
         window.removeEventListener('storage_changed', updateSettings);
         window.removeEventListener('storage', updateSettings);
+        if (settingsChannel && supabaseClient) {
+          try { supabaseClient.removeChannel(settingsChannel); } catch(e) {}
+        }
       };
     }, []);
 
@@ -1641,16 +1673,31 @@
         window.addEventListener('storage_changed', handleStorageChange);
         window.addEventListener('storage', handleStorageChange);
 
+        // Poll orders every 5 seconds (fast, orders only)
         const syncInterval = setInterval(() => {
           loadDashboard(false);
-        }, 3000);
+        }, 5000);
 
-        let channel = null;
+        let ordersChannel = null;
+        let settingsChannel = null;
         if (supabaseClient) {
           try {
-            channel = supabaseClient.channel('admin-sync')
-              .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+            // Realtime: new orders from any device
+            ordersChannel = supabaseClient.channel('admin-orders-sync')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
                 loadDashboard(false);
+              })
+              .subscribe();
+
+            // Realtime: settings changes (reload feeInput, discounts, etc)
+            settingsChannel = supabaseClient.channel('admin-settings-watch')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, async () => {
+                const s = await repo.getDeliverySettings();
+                setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
+                const disc = await repo.getDiscountSettings();
+                setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
+                setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
+                setDiscItemId(disc.targetItemId || ''); setDiscLabel(disc.label || '');
               })
               .subscribe();
           } catch(e) {}
@@ -1660,8 +1707,11 @@
           clearInterval(syncInterval);
           window.removeEventListener('storage_changed', handleStorageChange);
           window.removeEventListener('storage', handleStorageChange);
-          if (channel && supabaseClient) {
-            try { supabaseClient.removeChannel(channel); } catch(e) {}
+          if (ordersChannel && supabaseClient) {
+            try { supabaseClient.removeChannel(ordersChannel); } catch(e) {}
+          }
+          if (settingsChannel && supabaseClient) {
+            try { supabaseClient.removeChannel(settingsChannel); } catch(e) {}
           }
         };
       }
@@ -2359,7 +2409,7 @@
       // TAB 4: DELIVERY & CAPACITY SETTINGS
       adminTab === 'settings' ? React.createElement('div', { style: { maxWidth: '480px', background: 'var(--bg-panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' } },
         React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Delivery & Capacity Settings'),
-        React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); await repo.saveDeliverySettings(enabledInput, feeInput, maxInput); alert("Delivery settings saved successfully!"); loadDashboard(); } },
+        React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); await repo.saveDeliverySettings(enabledInput, feeInput, maxInput); const s = await repo.getDeliverySettings(); setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled); alert("✅ Delivery settings saved! All devices will update automatically."); } },
           React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', cursor: 'pointer' } },
             React.createElement('input', { type: 'checkbox', checked: enabledInput, onChange: e => setEnabledInput(e.target.checked) }),
             React.createElement('span', { style: { fontWeight: 'bold' } }, 'Enable Delivery Charges')
@@ -2460,9 +2510,14 @@
           className: 'btn btn-primary',
           style: { width: '100%', padding: '14px', justifyContent: 'center', fontWeight: 800, fontSize: '1rem' },
           onClick: async () => {
-            await repo.saveDiscountSettings({ enabled: discEnabled, type: discType, value: parseFloat(discValue)||0, targetType: discTarget, targetCategory: discCategory, targetItemId: discItemId, label: discLabel });
-            alert('✅ Discount settings saved! Menu will update immediately.');
-            loadDashboard();
+            const discPayload = { enabled: discEnabled, type: discType, value: parseFloat(discValue)||0, targetType: discTarget, targetCategory: discCategory, targetItemId: discItemId, label: discLabel };
+            await repo.saveDiscountSettings(discPayload);
+            // Re-read from Supabase to confirm saved values
+            const disc = await repo.getDiscountSettings();
+            setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
+            setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
+            setDiscItemId(disc.targetItemId || ''); setDiscLabel(disc.label || '');
+            alert('✅ Discount settings saved! All devices will update automatically.');
           }
         }, 'Save Discount Settings 🏷️')
 
