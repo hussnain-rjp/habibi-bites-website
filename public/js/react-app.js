@@ -214,11 +214,9 @@
       let localItems = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : fallbackItems);
 
       if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('menu_items').select('*');
+        supabaseClient.from('menu_items').select('*').then(({ data, error }) => {
           if (!error && Array.isArray(data) && data.length > 0) {
             const mapped = data.map(item => {
-              let imagePath = item.image || '';
               let parsedPrices = item.prices;
               if (typeof item.prices === 'string') {
                 try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
@@ -229,7 +227,7 @@
                 category: item.category,
                 description: item.description,
                 prices: parsedPrices,
-                image: imagePath
+                image: item.image || ''
               };
             });
             if (mapped.length > 0) {
@@ -238,12 +236,9 @@
                 window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
               }
               writeStore(DB_KEYS.MENU_ITEMS, mapped);
-              return mapped;
             }
           }
-        } catch (err) {
-          console.warn("Supabase getMenuItems fallback:", err);
-        }
+        }).catch(err => console.warn("Supabase getMenuItems background sync:", err));
       }
       return (localItems && localItems.length > 0) ? localItems : fallbackItems;
     }
