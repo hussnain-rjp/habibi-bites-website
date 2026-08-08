@@ -1622,7 +1622,7 @@
       setPriceXlarge(2250);
     };
 
-    const handleSaveMenuItem = async (e) => {
+    const handleSaveMenuItem = (e) => {
       e.preventDefault();
       let prices = {};
       if (itemCat === 'pizza' || itemCat === 'special_pizza') {
@@ -1645,15 +1645,29 @@
         image: itemImg
       };
 
-      await repo.saveMenuItem(payload);
+      // 1. Instant local UI update (0ms)
+      setMenuItems(prev => {
+        const idx = prev.findIndex(i => String(i.id) === String(payload.id));
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = payload;
+          return updated;
+        }
+        return [payload, ...prev];
+      });
+
       handleCancelEdit();
-      loadDashboard();
+
+      // 2. Non-blocking background save to Supabase
+      repo.saveMenuItem(payload).catch(err => console.warn("Background save error:", err));
     };
 
-    const handleDeleteMenuItem = async (id) => {
+    const handleDeleteMenuItem = (id) => {
       if (confirm("Are you sure you want to delete this menu item?")) {
-        await repo.deleteMenuItem(id);
-        loadDashboard();
+        // 1. Instant local UI update (0ms)
+        setMenuItems(prev => prev.filter(i => String(i.id) !== String(id)));
+        // 2. Non-blocking background delete in Supabase
+        repo.deleteMenuItem(id).catch(err => console.warn("Background delete error:", err));
       }
     };
 

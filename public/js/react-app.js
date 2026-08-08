@@ -1617,41 +1617,52 @@
       setItemImg('/assets/hero_food_collage.png');
     };
 
-    const handleSaveMenuItem = async (e) => {
+    const handleSaveMenuItem = (e) => {
       e.preventDefault();
-      if (!itemName) return;
-
-      let pricesObj = {};
+      let prices = {};
       if (itemCat === 'pizza' || itemCat === 'special_pizza') {
-        pricesObj = {
-          small: parseFloat(priceSmall) || 550,
-          regular: parseFloat(priceRegular) || 1150,
-          large: parseFloat(priceLarge) || 1600,
-          xlarge: parseFloat(priceXlarge) || 2250
+        prices = {
+          small: parseInt(priceSmall),
+          regular: parseInt(priceRegular),
+          large: parseInt(priceLarge),
+          xlarge: parseInt(priceXlarge)
         };
       } else {
-        pricesObj = { default: parseFloat(itemPrice) || 550 };
+        prices = { default: parseInt(itemPrice) };
       }
 
-      const itemToSave = {
-        id: editingItem ? editingItem.id : `custom_${Date.now()}`,
+      const payload = {
+        id: editingItem ? editingItem.id : (itemId || itemCat + '_' + Date.now()),
         name: itemName,
         category: itemCat,
         description: itemDesc,
-        prices: pricesObj,
-        image: itemImg || "/assets/hero_food_collage.png"
+        prices: prices,
+        image: itemImg
       };
 
-      await repo.saveMenuItem(itemToSave);
-      alert(`Item "${itemName}" saved with custom uploaded image!`);
+      // 1. Instant local UI update (0ms)
+      setMenuItems(prev => {
+        const idx = prev.findIndex(i => String(i.id) === String(payload.id));
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = payload;
+          return updated;
+        }
+        return [payload, ...prev];
+      });
+
       handleCancelEdit();
-      loadDashboard();
+
+      // 2. Non-blocking background save to Supabase
+      repo.saveMenuItem(payload).catch(err => console.warn("Background save error:", err));
     };
 
-    const handleDeleteMenuItem = async (id) => {
+    const handleDeleteMenuItem = (id) => {
       if (confirm("Are you sure you want to delete this menu item?")) {
-        await repo.deleteMenuItem(id);
-        loadDashboard();
+        // 1. Instant local UI update (0ms)
+        setMenuItems(prev => prev.filter(i => String(i.id) !== String(id)));
+        // 2. Non-blocking background delete in Supabase
+        repo.deleteMenuItem(id).catch(err => console.warn("Background delete error:", err));
       }
     };
 
