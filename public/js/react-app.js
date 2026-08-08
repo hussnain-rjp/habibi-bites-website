@@ -230,6 +230,14 @@
                 image: item.image || ''
               };
             });
+
+            const supabaseIds = new Set(mapped.map(m => String(m.id)));
+            localItems.forEach(loc => {
+              if (loc && loc.id && !supabaseIds.has(String(loc.id))) {
+                mapped.push(loc);
+              }
+            });
+
             if (mapped.length > 0) {
               if (typeof window !== 'undefined') {
                 window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
@@ -243,9 +251,10 @@
       return (localItems && localItems.length > 0) ? localItems : fallbackItems;
     }
     async saveMenuItem(item) {
-      const items = (await readStore(DB_KEYS.MENU_ITEMS)) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
+      const storeData = readStore(DB_KEYS.MENU_ITEMS);
+      const items = (storeData && storeData.length > 0) ? [...storeData] : (window.HABIBI_MENU ? [...window.HABIBI_MENU.items] : []);
       const idx = items.findIndex(i => String(i.id) === String(item.id));
-      if (idx !== -1) items[idx] = item; else items.push(item);
+      if (idx !== -1) items[idx] = item; else items.unshift(item);
       if (typeof window !== 'undefined') {
         window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
         window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = items;
