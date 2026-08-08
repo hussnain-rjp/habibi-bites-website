@@ -88,7 +88,20 @@ export const MenuPage = () => {
         {/* Scrollable Sections */}
         <section className="menu-sections-wrapper" id="menu-sections-container">
           {categories.map(cat => {
-            const catItems = items.filter(i => i.category === cat.id);
+            const specialPizzaIds = [
+              'pizza_beef_bonanza', 'pizza_arabic', 'pizza_4in1', 'pizza_donner',
+              'pizza_lasagna', 'pizza_cheese_steak', 'pizza_crown_crust',
+              'pizza_behri_kabab', 'pizza_cheese_stuff', 'pizza_kabab_stuff', 'pizza_habibi_grill'
+            ];
+            const catItems = items.filter(i => {
+              if (cat.id === 'special_pizza') {
+                return i.category === 'special_pizza' || i.type === 'pizza_special' || specialPizzaIds.includes(String(i.id));
+              }
+              if (cat.id === 'pizza') {
+                return (i.category === 'pizza' && i.type !== 'pizza_special' && !specialPizzaIds.includes(String(i.id)));
+              }
+              return i.category === cat.id;
+            });
             return (
               <div className="menu-section" id={`section-${cat.id}`} key={cat.id}>
                 <div className="menu-section-header-row">
