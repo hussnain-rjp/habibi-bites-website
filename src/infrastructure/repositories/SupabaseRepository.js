@@ -89,25 +89,35 @@ export class SupabaseRepository extends IRepository {
     if (!this.client) return [];
     checkRateLimit('deals', 'publicRead');
     recordAttempt('deals', 'publicRead');
-    const { data, error } = await this.client.from('deals').select('*');
+    const { data, error } = await this.client.from('deals').select('*').order('id', { ascending: true });
     if (error) return [];
     return data || [];
   }
 
-  async addDeal(deal) {
+  async saveDeal(deal) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
-    const { data, error } = await this.client.from('deals').insert([deal]).select().single();
+    const payload = {
+      id: deal.id,
+      name: deal.name,
+      tag: deal.tag || 'Special',
+      contents: deal.contents || '',
+      price: parseFloat(deal.price) || 0,
+      category: deal.category || 'Deals',
+      image: deal.image || 'assets/hero_food_collage.png',
+      show_on_home: !!deal.show_on_home
+    };
+    const { data, error } = await this.client.from('deals').upsert(payload).select().single();
     if (error) throw new Error(error.message);
     return data;
   }
 
+  async addDeal(deal) {
+    return this.saveDeal(deal);
+  }
+
   async updateDeal(deal) {
-    checkRateLimit('admin_write', 'authenticatedAction');
-    recordAttempt('admin_write', 'authenticatedAction');
-    const { error } = await this.client.from('deals').update(deal).eq('id', deal.id);
-    if (error) throw new Error(error.message);
-    return true;
+    return this.saveDeal(deal);
   }
 
   async deleteDeal(id) {
@@ -120,11 +130,11 @@ export class SupabaseRepository extends IRepository {
 
   // ── Orders ────────────────────────────────────────────────────────────────
 
-  async getOrders() {
+  async getOrders(limit = 100) {
     if (!this.client) return [];
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
-    const { data, error } = await this.client.from('orders').select('*').order('created_at', { ascending: false });
+    const { data, error } = await this.client.from('orders').select('*').order('created_at', { ascending: false }).limit(limit);
     if (error) return [];
     return data || [];
   }
@@ -143,9 +153,19 @@ export class SupabaseRepository extends IRepository {
     checkRateLimit('tracker', 'publicRead');
     recordAttempt('tracker', 'publicRead');
     const clean = phone.replace(/[^0-9]/g, "");
-    const { data, error } = await this.client.from('orders').select('*');
+    if (!clean) return [];
+    try {
+      const { data, error } = await this.client
+        .from('orders')
+        .select('*')
+        .filter('customer->>phone', 'ilike', `%${clean}%`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (!error && data && data.length > 0) return data;
+    } catch(e) {}
+    const { data, error } = await this.client.from('orders').select('*').order('created_at', { ascending: false }).limit(50);
     if (error) return [];
-    return (data || []).filter(o => o.customer?.phone?.replace(/[^0-9]/g, "") === clean);
+    return (data || []).filter(o => (o.customer?.phone || '').replace(/[^0-9]/g, "").includes(clean));
   }
 
   async createOrder(customerDetails, items, total, deliveryFee = 0) {

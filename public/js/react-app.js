@@ -296,7 +296,66 @@
         }
       }
     }
-    async getDeals() { return readStore(DB_KEYS.DEALS) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []); }
+    async getDeals() {
+      let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : null;
+      let storeItems = readStore(DB_KEYS.DEALS);
+      let localDeals = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_DEALS ? window.HABIBI_DEALS : []));
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('deals').select('*').order('id', { ascending: true });
+          if (!error && data && data.length > 0) {
+            writeStore(DB_KEYS.DEALS, data);
+            return data;
+          }
+        } catch (err) {
+          console.warn("Supabase getDeals fallback:", err);
+        }
+      }
+      return localDeals;
+    }
+
+    async saveDeal(deal) {
+      const deals = (await readStore(DB_KEYS.DEALS)) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []);
+      const idx = deals.findIndex(d => String(d.id) === String(deal.id));
+      if (idx !== -1) deals[idx] = deal; else deals.push(deal);
+      writeStore(DB_KEYS.DEALS, deals);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const payload = {
+            id: deal.id,
+            name: deal.name,
+            tag: deal.tag || 'Special',
+            contents: deal.contents || '',
+            price: parseFloat(deal.price) || 0,
+            category: deal.category || 'Deals',
+            image: deal.image || 'assets/hero_food_collage.png',
+            show_on_home: !!deal.show_on_home
+          };
+          const { error } = await supabaseClient.from('deals').upsert(payload);
+          if (error) console.warn("Supabase saveDeal error:", error.message);
+        } catch (err) {
+          console.warn("Supabase saveDeal error:", err);
+        }
+      }
+      return deal;
+    }
+
+    async deleteDeal(id) {
+      const deals = ((await readStore(DB_KEYS.DEALS)) || []).filter(d => String(d.id) !== String(id));
+      writeStore(DB_KEYS.DEALS, deals);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          const { error } = await supabaseClient.from('deals').delete().eq('id', id);
+          if (error) console.warn("Supabase deleteDeal error:", error.message);
+        } catch (err) {
+          console.warn("Supabase deleteDeal error:", err);
+        }
+      }
+    }
     async getOrders() {
       let localOrders = readStore(DB_KEYS.ORDERS) || [];
       if (supabaseClient) {
@@ -894,10 +953,17 @@
   function HomePageView({ setActivePage, addToCart }) {
     const [discountRule, setDiscountRule] = useState(null);
     const [restInfo, setRestInfo] = useState(null);
+    const [homeDeals, setHomeDeals] = useState([]);
     useEffect(() => {
       const loadData = () => {
         repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
         repo.getRestaurantInfo().then(setRestInfo).catch(() => {});
+        repo.getDeals().then(data => {
+          if (data && data.length > 0) {
+            const featured = data.filter(d => d.show_on_home || d.showOnHome);
+            setHomeDeals(featured.length > 0 ? featured : data.slice(0, 4));
+          }
+        }).catch(() => {});
       };
       loadData();
       window.addEventListener('storage_changed', loadData);
@@ -964,7 +1030,7 @@
             React.createElement('h2', { className: 'section-title' }, 'Bestselling Combos')
           ),
           React.createElement('div', { className: 'deals-grid' },
-            (featured.length > 0 ? featured : deals.slice(0, 4)).map(deal =>
+            (homeDeals.length > 0 ? homeDeals : (featured.length > 0 ? featured : deals.slice(0, 4))).map(deal =>
               React.createElement(DealCardComponent, { key: deal.id, deal, addToCart, discountRule })
             )
           )
@@ -977,10 +1043,14 @@
     const [items, setItems] = useState([]);
     const [activeCat, setActiveCat] = useState('pizza');
     const [discountRule, setDiscountRule] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
       const load = () => {
-        repo.getMenuItems().then(setItems);
+        repo.getMenuItems().then(res => {
+          setItems(res);
+          setLoading(false);
+        });
         repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
       };
       load();
@@ -1083,8 +1153,12 @@
   function DealsView({ addToCart }) {
     const [deals, setDeals] = useState([]);
     const [discountRule, setDiscountRule] = useState(null);
+    const [loading, setLoading] = useState(true);
     useEffect(() => {
-      repo.getDeals().then(setDeals);
+      repo.getDeals().then(res => {
+        setDeals(res);
+        setLoading(false);
+      });
       const loadDisc = () => repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
       loadDisc();
       window.addEventListener('storage_changed', loadDisc);
@@ -1120,7 +1194,12 @@
         React.createElement('h1', { className: 'section-title' }, 'Habibi Exclusive Deals')
       ),
       React.createElement('div', { className: 'deals-grid' },
-        deals.map(deal => React.createElement(DealCardComponent, { key: deal.id, deal, addToCart, discountRule }))
+        loading && deals.length === 0 ? [1, 2, 3, 4].map(n => React.createElement('div', { key: n, className: 'skeleton-card' },
+          React.createElement('div', { className: 'skeleton-box', style: { width: '100%', height: '160px' } }),
+          React.createElement('div', { className: 'skeleton-box', style: { width: '60%', height: '22px' } }),
+          React.createElement('div', { className: 'skeleton-box', style: { width: '80%', height: '16px' } }),
+          React.createElement('div', { className: 'skeleton-box', style: { width: '100%', height: '40px', marginTop: 'auto' } })
+        )) : deals.map(deal => React.createElement(DealCardComponent, { key: deal.id, deal, addToCart, discountRule }))
       )
     );
   }
@@ -1460,6 +1539,16 @@
     const [menuItems, setMenuItems] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState('all');
     
+    // Deals Editor State
+    const [dealsList, setDealsList] = useState([]);
+    const [editingDeal, setEditingDeal] = useState(null);
+    const [dealName, setDealName] = useState('');
+    const [dealTag, setDealTag] = useState('Hot Seller');
+    const [dealContents, setDealContents] = useState('');
+    const [dealPrice, setDealPrice] = useState(1150);
+    const [dealImg, setDealImg] = useState('/assets/hero_food_collage.png');
+    const [dealShowHome, setDealShowHome] = useState(false);
+
     // Menu Editor State (Add & Edit Existing)
     const [editingItem, setEditingItem] = useState(null);
     const [itemId, setItemId] = useState('');
@@ -1576,6 +1665,7 @@
 
       setPendingReviews(await repo.getPendingReviews());
       setMenuItems(await repo.getMenuItems());
+      setDealsList(await repo.getDeals());
 
       if (isInitial) {
         const s = await repo.getDeliverySettings();
@@ -1630,6 +1720,93 @@
           img.src = reader.result;
         };
         reader.readAsDataURL(file);
+      }
+    };
+
+    const handleDealFileUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxDim = 300;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.55);
+            setDealImg(compressed);
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+
+    const handleStartDealEdit = (deal) => {
+      setEditingDeal(deal);
+      setDealName(deal.name || '');
+      setDealTag(deal.tag || 'Special');
+      setDealContents(deal.contents || '');
+      setDealPrice(deal.price || 0);
+      setDealImg(deal.image || '/assets/hero_food_collage.png');
+      setDealShowHome(!!(deal.show_on_home || deal.showOnHome));
+    };
+
+    const handleCancelDealEdit = () => {
+      setEditingDeal(null);
+      setDealName('');
+      setDealTag('Hot Seller');
+      setDealContents('');
+      setDealPrice(1150);
+      setDealImg('/assets/hero_food_collage.png');
+      setDealShowHome(false);
+    };
+
+    const handleSaveDeal = (e) => {
+      e.preventDefault();
+      const payload = {
+        id: editingDeal ? editingDeal.id : (`deal_${Date.now()}`),
+        name: dealName,
+        tag: dealTag,
+        contents: dealContents,
+        price: parseFloat(dealPrice) || 0,
+        category: 'Deals',
+        image: dealImg,
+        show_on_home: dealShowHome
+      };
+
+      setDealsList(prev => {
+        const idx = prev.findIndex(d => String(d.id) === String(payload.id));
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = payload;
+          return updated;
+        }
+        return [...prev, payload];
+      });
+
+      handleCancelDealEdit();
+      repo.saveDeal(payload).catch(err => console.warn("Background saveDeal error:", err));
+    };
+
+    const handleDeleteDeal = (id) => {
+      if (confirm("Are you sure you want to delete this deal?")) {
+        setDealsList(prev => prev.filter(d => String(d.id) !== String(id)));
+        repo.deleteDeal(id).catch(err => console.warn("Background deleteDeal error:", err));
       }
     };
 
@@ -1777,7 +1954,8 @@
       React.createElement('div', { style: { display: 'flex', gap: '10px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '5px' } },
         [
           { id: 'orders', label: '⚡ Live Orders Queue' },
-          { id: 'menu_editor', label: '📖 Menu & Categories Editor' },
+          { id: 'menu_editor', label: '📖 Menu Editor' },
+          { id: 'deals_editor', label: '🏷️ Deals Manager' },
           { id: 'invoices', label: '📜 Invoice History' },
           { id: 'settings', label: '⚙️ Delivery & Capacity' },
           { id: 'discount', label: '🎁 Discount Manager' },
@@ -2009,6 +2187,84 @@
               React.createElement('div', { style: { display: 'flex', gap: '6px' } },
                 React.createElement('button', { onClick: () => handleStartEdit(item), style: { background: 'var(--bg-panel)', color: 'var(--accent)', border: '1px solid var(--accent)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' } }, '✏️ Edit'),
                 React.createElement('button', { onClick: () => handleDeleteMenuItem(item.id), style: { background: 'var(--primary)', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' } }, '🗑️ Delete')
+              )
+            ))
+          )
+        )
+      ) : null,
+
+      // TAB: DEALS MANAGER
+      adminTab === 'deals_editor' ? React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' } },
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' } },
+            React.createElement('h3', { style: { color: 'var(--accent)', margin: 0 } }, editingDeal ? `✏️ Edit Deal (${editingDeal.name})` : '➕ Add New Deal'),
+            editingDeal ? React.createElement('button', { onClick: handleCancelDealEdit, style: { background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer' } }, 'Cancel ❌') : null
+          ),
+          React.createElement('form', { onSubmit: handleSaveDeal },
+            React.createElement('div', { style: { marginBottom: '15px', background: 'var(--bg-elevated)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border-light)' } },
+              React.createElement('div', { style: { display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '10px' } },
+                React.createElement('img', { src: dealImg || '/assets/hero_food_collage.png', alt: 'Preview', style: { width: '75px', height: '75px', objectFit: 'cover', borderRadius: '6px', border: '2px solid var(--accent)' } }),
+                React.createElement('div', { style: { flex: 1 } },
+                  React.createElement('label', { style: { display: 'block', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '4px', color: 'var(--accent)' } }, '📁 Upload Deal Photo:'),
+                  React.createElement('input', {
+                    type: 'file',
+                    accept: 'image/*',
+                    onChange: handleDealFileUpload,
+                    style: { width: '100%', fontSize: '0.8rem', color: 'var(--text-muted)' }
+                  })
+                )
+              )
+            ),
+            React.createElement('div', { style: { marginBottom: '10px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Deal Title'),
+              React.createElement('input', { required: true, value: dealName, onChange: e => setDealName(e.target.value), placeholder: 'e.g. Habibi Special Deal 1', style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '10px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Badge Tag'),
+              React.createElement('input', { value: dealTag, onChange: e => setDealTag(e.target.value), placeholder: 'e.g. Hot Seller / Mega Feast', style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '10px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Price (Rs.)'),
+              React.createElement('input', { type: 'number', required: true, value: dealPrice, onChange: e => setDealPrice(e.target.value), style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '10px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Deal Contents & Items included'),
+              React.createElement('textarea', { rows: 2, required: true, value: dealContents, onChange: e => setDealContents(e.target.value), placeholder: 'e.g. 1 Large Pizza + 6 Wings + 1.5L Drink', style: { width: '100%', padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '15px', background: 'rgba(245, 166, 35, 0.1)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--border)' } },
+              React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: 'var(--accent)', fontWeight: 'bold' } },
+                React.createElement('input', {
+                  type: 'checkbox',
+                  checked: dealShowHome,
+                  onChange: e => setDealShowHome(e.target.checked),
+                  style: { width: '18px', height: '18px', cursor: 'pointer' }
+                }),
+                '⭐ Show on Home Page (Bestselling Combos Grid)'
+              )
+            ),
+            React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+              React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { flex: 1, justifyContent: 'center' } }, editingDeal ? 'Save Deal 💾' : 'Add Deal ➕'),
+              editingDeal ? React.createElement('button', { type: 'button', onClick: handleCancelDealEdit, className: 'btn btn-outline', style: { padding: '0 15px' } }, 'Cancel') : null
+            )
+          )
+        ),
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginBottom: '15px' } }, `Deals Catalog (${dealsList.length} Active)`),
+          React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
+            dealsList.map(deal => React.createElement('div', { key: deal.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-elevated)', marginBottom: '8px', borderRadius: '4px', border: editingDeal?.id === deal.id ? '1px solid var(--accent)' : '1px solid var(--border)' } },
+              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+                React.createElement('img', { src: deal.image || '/assets/hero_food_collage.png', alt: deal.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
+                React.createElement('div', null,
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+                    React.createElement('strong', { style: { color: 'var(--text-main)' } }, deal.name),
+                    (deal.show_on_home || deal.showOnHome) ? React.createElement('span', { style: { fontSize: '0.7rem', background: 'var(--primary)', color: '#000', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' } }, '⭐ HOME') : null
+                  ),
+                  React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--accent)' } }, `Rs. ${deal.price} | ${deal.contents}`)
+                )
+              ),
+              React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+                React.createElement('button', { onClick: () => handleStartDealEdit(deal), style: { background: 'var(--bg-panel)', color: 'var(--accent)', border: '1px solid var(--accent)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' } }, '✏️ Edit'),
+                React.createElement('button', { onClick: () => handleDeleteDeal(deal.id), style: { background: 'var(--primary)', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' } }, '🗑️ Delete')
               )
             ))
           )
