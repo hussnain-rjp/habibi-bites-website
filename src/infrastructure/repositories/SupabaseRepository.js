@@ -19,23 +19,31 @@ export class SupabaseRepository extends IRepository {
   // ── Menu Items ────────────────────────────────────────────────────────────
 
   async getMenuItems() {
-    if (!this.client) return [];
-    checkRateLimit('menu', 'publicRead');
-    recordAttempt('menu', 'publicRead');
-    const { data, error } = await this.client.from('menu_items').select('*');
-    if (error) { console.error("Supabase Error:", error.message); return []; }
-    return (data || []).map(item => {
-      let imagePath = item.image || '';
-      if (imagePath.startsWith('data:') && imagePath.length > 300) {
-        const cat = (item.category || '').toLowerCase();
-        if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
-        else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
-        else if (cat.includes('desi') || cat.includes('karahi')) imagePath = 'assets/desi_karahi.png';
-        else if (cat.includes('starter') || cat.includes('fries')) imagePath = 'assets/starters_loaded_fries.png';
-        else imagePath = 'assets/hero_food_collage.png';
+    let fallback = (typeof window !== 'undefined' && window.HABIBI_MENU) ? window.HABIBI_MENU.items : [];
+    if (!this.client) return fallback;
+    try {
+      checkRateLimit('menu', 'publicRead');
+      recordAttempt('menu', 'publicRead');
+      const { data, error } = await this.client.from('menu_items').select('*');
+      if (error || !data || data.length === 0) {
+        if (error) console.error("Supabase getMenuItems Error:", error.message);
+        return fallback;
       }
-      return { ...item, image: imagePath };
-    });
+      return data.map(item => {
+        let imagePath = item.image || '';
+        if (imagePath.startsWith('data:') && imagePath.length > 300) {
+          const cat = (item.category || '').toLowerCase();
+          if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
+          else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
+          else if (cat.includes('desi') || cat.includes('karahi')) imagePath = 'assets/desi_karahi.png';
+          else if (cat.includes('starter') || cat.includes('fries')) imagePath = 'assets/starters_loaded_fries.png';
+          else imagePath = 'assets/hero_food_collage.png';
+        }
+        return { ...item, image: imagePath };
+      });
+    } catch (err) {
+      return fallback;
+    }
   }
 
   async getMenuItemById(id) {

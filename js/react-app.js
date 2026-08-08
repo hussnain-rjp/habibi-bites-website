@@ -198,7 +198,8 @@
       if (!readStore(DB_KEYS.DEALS) && window.HABIBI_DEALS) writeStore(DB_KEYS.DEALS, window.HABIBI_DEALS || []);
     }
     async getMenuItems() {
-      let localItems = readStore(DB_KEYS.MENU_ITEMS) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
+      let storeItems = readStore(DB_KEYS.MENU_ITEMS);
+      let localItems = (storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
       if (supabaseClient) {
         try {
           const { data, error } = await supabaseClient.from('menu_items').select('*');
@@ -213,12 +214,16 @@
                 else if (cat.includes('starter') || cat.includes('fries')) imagePath = 'assets/starters_loaded_fries.png';
                 else imagePath = 'assets/hero_food_collage.png';
               }
+              let parsedPrices = item.prices;
+              if (typeof item.prices === 'string') {
+                try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
+              }
               return {
                 id: item.id,
                 name: item.name,
                 category: item.category,
                 description: item.description,
-                prices: typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices,
+                prices: parsedPrices,
                 image: imagePath
               };
             });
@@ -956,11 +961,19 @@
     const [discountRule, setDiscountRule] = useState(null);
 
     useEffect(() => {
-      repo.getMenuItems().then(setItems);
-      const loadDisc = () => repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
-      loadDisc();
-      window.addEventListener('storage_changed', loadDisc);
-      return () => window.removeEventListener('storage_changed', loadDisc);
+      const load = () => {
+        repo.getMenuItems().then(setItems);
+        repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
+      };
+      load();
+      window.addEventListener('storage_changed', load);
+      window.addEventListener('storage', load);
+      const timer = setInterval(load, 4000);
+      return () => {
+        clearInterval(timer);
+        window.removeEventListener('storage_changed', load);
+        window.removeEventListener('storage', load);
+      };
     }, []);
 
     const categories = window.HABIBI_MENU?.categories || [
@@ -1485,9 +1498,29 @@
         const handleStorageChange = () => loadDashboard(false);
         window.addEventListener('storage_changed', handleStorageChange);
         window.addEventListener('storage', handleStorageChange);
+
+        const syncInterval = setInterval(() => {
+          loadDashboard(false);
+        }, 3000);
+
+        let channel = null;
+        if (supabaseClient) {
+          try {
+            channel = supabaseClient.channel('admin-sync')
+              .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+                loadDashboard(false);
+              })
+              .subscribe();
+          } catch(e) {}
+        }
+
         return () => {
+          clearInterval(syncInterval);
           window.removeEventListener('storage_changed', handleStorageChange);
           window.removeEventListener('storage', handleStorageChange);
+          if (channel && supabaseClient) {
+            try { supabaseClient.removeChannel(channel); } catch(e) {}
+          }
         };
       }
     }, [isAdmin, adminTab]);
@@ -1874,11 +1907,12 @@
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' } },
             React.createElement('h3', { style: { color: 'var(--accent)', margin: 0 } }, 'Menu Catalog'),
             React.createElement('select', { value: selectedCategory, onChange: e => setSelectedCategory(e.target.value), style: { padding: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } },
-              ['pizza', 'special_pizza', 'burgers', 'wraps', 'desi', 'starters', 'pasta', 'drinks'].map(c => React.createElement('option', { key: c, value: c }, c.toUpperCase()))
+              ['all', 'pizza', 'special_pizza', 'burgers', 'wraps', 'desi', 'starters', 'pasta', 'drinks'].map(c => React.createElement('option', { key: c, value: c }, c.toUpperCase()))
             )
           ),
           React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
             menuItems.filter(i => {
+              if (selectedCategory === 'all') return true;
               const cat = (i.category || '').toLowerCase().trim();
               const sel = (selectedCategory || '').toLowerCase().trim();
               return cat === sel || cat.includes(sel) || sel.includes(cat);
