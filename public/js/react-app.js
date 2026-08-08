@@ -112,6 +112,23 @@
     try { localStorage.setItem(key, JSON.stringify(data)); window.dispatchEvent(new Event("storage_changed")); } catch (e) {}
   }
 
+  // Standard SHA-256 password hasher for secure offline verification
+  async function hashPassword(pwd) {
+    if (typeof crypto !== 'undefined' && crypto.subtle && typeof TextEncoder !== 'undefined') {
+      const msgBuffer = new TextEncoder().encode(pwd);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    let hash = 0;
+    for (let i = 0; i < pwd.length; i++) {
+      const char = pwd.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+    return 'h_' + Math.abs(hash).toString(16);
+  }
+
   const SUPABASE_URL = "https://wgsssibktygkwyicdtlr.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indnc3NzaWJrdHlna3d5aWNkdGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxMjEwNDYsImV4cCI6MjEwMTY5NzA0Nn0.EYAek-TmMZ_oE1t9jRdcZjlfcNC3e77rTPMGh0jgFRo";
 
@@ -139,6 +156,10 @@
           window.dispatchEvent(new Event("storage_changed"));
         })
         .subscribe();
+      // Security Hardening: Immediately purge legacy plaintext credentials if found in client storage
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem("habibi_admin_credentials");
+      }
     } catch (e) {
       console.warn("Supabase init error:", e);
     }
@@ -542,21 +563,69 @@
       return data;
     }
     async getAdminCredentials() {
-      return readStore(DB_KEYS.ADMIN_CREDS) || { username: 'admin', password: 'habibibites123' };
+      // NEVER return plain-text passwords or hashes to client UI
+      const local = readStore('habibi_admin_meta');
+      return { username: local?.username || 'admin' };
     }
     async loginAdmin(u, p) {
-      const creds = await this.getAdminCredentials();
-      if (u === creds.username && p === creds.password) {
+      if (supabaseClient) {
+        try {
+          const email = u.includes('@') ? u : `${u}@habibibites.com`;
+          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: p });
+          if (!error && data?.session) {
+            writeStore(DB_KEYS.ADMIN, { u, time: Date.now(), token: data.session.access_token });
+            if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
+            return true;
+          }
+        } catch (err) {
+          // fallback to offline hashed validation
+        }
+      }
+
+      // Hashed offline check
+      const inputHash = await hashPassword(p);
+      const storedHash = readStore('habibi_admin_pwd_hash') || await hashPassword('habibibites123');
+      const meta = readStore('habibi_admin_meta') || { username: 'admin' };
+
+      if (u === meta.username && inputHash === storedHash) {
         writeStore(DB_KEYS.ADMIN, { u, time: Date.now() });
+        if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
         return true;
       }
       return false;
     }
     async changeAdminCredentials(newUsername, newPassword) {
-      writeStore(DB_KEYS.ADMIN_CREDS, { username: newUsername, password: newPassword });
-      // Update active session username
+      writeStore('habibi_admin_meta', { username: newUsername });
+
+      if (newPassword && newPassword.trim().length > 0) {
+        if (supabaseClient) {
+          try {
+            await supabaseClient.auth.updateUser({ password: newPassword });
+          } catch (err) {}
+        }
+        const newHash = await hashPassword(newPassword);
+        writeStore('habibi_admin_pwd_hash', newHash);
+      }
+
       const session = readStore(DB_KEYS.ADMIN);
       if (session) writeStore(DB_KEYS.ADMIN, { ...session, u: newUsername });
+      if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
+    }
+    async logoutAdmin() {
+      if (supabaseClient) {
+        try { await supabaseClient.auth.signOut(); } catch (err) {}
+      }
+      localStorage.removeItem(DB_KEYS.ADMIN);
+    }
+    async isAdminLoggedIn() {
+      if (supabaseClient) {
+        try {
+          const { data } = await supabaseClient.auth.getSession();
+          if (data?.session) return true;
+        } catch (err) {}
+      }
+      const session = readStore(DB_KEYS.ADMIN);
+      return !!(session && session.u);
     }
     async getRestaurantInfo() {
       const defaultInfo = {
