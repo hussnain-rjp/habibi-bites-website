@@ -1360,10 +1360,10 @@
     }
   }
 
-  // --- ADMIN DASHBOARD WITH CUSTOM IMAGE UPLOAD SUPPORT FROM PC ---
   function AdminView({ isAdmin, setIsAdmin }) {
     const [u, setU] = useState('');
     const [p, setP] = useState('');
+    const [loginError, setLoginError] = useState('');
     const [adminTab, setAdminTab] = useState('orders');
     const [orders, setOrders] = useState([]);
     const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -1539,15 +1539,16 @@
       setItemDesc(item.description || '');
       setItemCat(item.category || 'pizza');
       setItemImg(item.image || '/assets/hero_food_collage.png');
-      
-      if (item.prices) {
-        setItemPrice(item.prices.default || Object.values(item.prices)[0] || 550);
-        setPriceSmall(item.prices.small || 550);
-        setPriceRegular(item.prices.regular || 1150);
-        setPriceLarge(item.prices.large || 1600);
-        setPriceXlarge(item.prices.xlarge || 2250);
+
+      if (item.category === 'pizza' || item.category === 'special_pizza') {
+        const prices = item.prices || {};
+        setPriceSmall(prices.small || 550);
+        setPriceRegular(prices.regular || 1150);
+        setPriceLarge(prices.large || 1600);
+        setPriceXlarge(prices.xlarge || 2250);
       } else {
-        setItemPrice(550);
+        const prices = item.prices || {};
+        setItemPrice(prices.default || 0);
       }
     };
 
@@ -1556,37 +1557,39 @@
       setItemId('');
       setItemName('');
       setItemDesc('');
-      setItemPrice(550);
+      setItemCat('pizza');
       setItemImg('/assets/hero_food_collage.png');
+      setItemPrice(550);
+      setPriceSmall(550);
+      setPriceRegular(1150);
+      setPriceLarge(1600);
+      setPriceXlarge(2250);
     };
 
     const handleSaveMenuItem = async (e) => {
       e.preventDefault();
-      if (!itemName) return;
-
-      let pricesObj = {};
+      let prices = {};
       if (itemCat === 'pizza' || itemCat === 'special_pizza') {
-        pricesObj = {
-          small: parseFloat(priceSmall) || 550,
-          regular: parseFloat(priceRegular) || 1150,
-          large: parseFloat(priceLarge) || 1600,
-          xlarge: parseFloat(priceXlarge) || 2250
+        prices = {
+          small: parseInt(priceSmall),
+          regular: parseInt(priceRegular),
+          large: parseInt(priceLarge),
+          xlarge: parseInt(priceXlarge)
         };
       } else {
-        pricesObj = { default: parseFloat(itemPrice) || 550 };
+        prices = { default: parseInt(itemPrice) };
       }
 
-      const itemToSave = {
-        id: editingItem ? editingItem.id : `custom_${Date.now()}`,
+      const payload = {
+        id: editingItem ? editingItem.id : (itemId || itemCat + '_' + Date.now()),
         name: itemName,
         category: itemCat,
         description: itemDesc,
-        prices: pricesObj,
-        image: itemImg || "/assets/hero_food_collage.png"
+        prices: prices,
+        image: itemImg
       };
 
-      await repo.saveMenuItem(itemToSave);
-      alert(`Item "${itemName}" saved with custom uploaded image!`);
+      await repo.saveMenuItem(payload);
       handleCancelEdit();
       loadDashboard();
     };
@@ -1612,8 +1615,24 @@
               style: { cursor: 'pointer', padding: '6px 12px', fontSize: '0.8rem' }
             }, soundEnabled ? '🔔 Sound ON' : '🔕 Sound OFF')
           ),
-          React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); const s = await repo.loginAdmin(u, p); setIsAdmin(s); } },
-            React.createElement('input', { value: u, onChange: e => setU(e.target.value), placeholder: 'Username', style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
+          React.createElement('form', {
+            onSubmit: async (e) => {
+              e.preventDefault();
+              setLoginError('');
+              try {
+                const s = await repo.loginAdmin(u, p);
+                if (s) {
+                  setIsAdmin(true);
+                } else {
+                  setLoginError('Invalid credentials. Please verify your username/email and password.');
+                }
+              } catch (err) {
+                setLoginError(err.message || 'Login failed.');
+              }
+            }
+          },
+            loginError ? React.createElement('div', { style: { padding: '10px 14px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '4px', marginBottom: '15px', fontSize: '0.85rem' } }, `⚠️ ${loginError}`) : null,
+            React.createElement('input', { value: u, onChange: e => setU(e.target.value), placeholder: 'Username or Email', style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
             React.createElement('input', { type: 'password', value: p, onChange: e => setP(e.target.value), placeholder: 'Password', style: { width: '100%', padding: '10px', marginBottom: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
             React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Login ➔')
           )

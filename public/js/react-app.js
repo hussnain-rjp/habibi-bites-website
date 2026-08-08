@@ -1364,6 +1364,7 @@
   function AdminView({ isAdmin, setIsAdmin }) {
     const [u, setU] = useState('');
     const [p, setP] = useState('');
+    const [loginError, setLoginError] = useState('');
     const [adminTab, setAdminTab] = useState('orders');
     const [orders, setOrders] = useState([]);
     const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -1612,8 +1613,24 @@
               style: { cursor: 'pointer', padding: '6px 12px', fontSize: '0.8rem' }
             }, soundEnabled ? '🔔 Sound ON' : '🔕 Sound OFF')
           ),
-          React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); const s = await repo.loginAdmin(u, p); setIsAdmin(s); } },
-            React.createElement('input', { value: u, onChange: e => setU(e.target.value), placeholder: 'Username', style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
+          React.createElement('form', {
+            onSubmit: async (e) => {
+              e.preventDefault();
+              setLoginError('');
+              try {
+                const s = await repo.loginAdmin(u, p);
+                if (s) {
+                  setIsAdmin(true);
+                } else {
+                  setLoginError('Invalid credentials. Please verify your username/email and password.');
+                }
+              } catch (err) {
+                setLoginError(err.message || 'Login failed.');
+              }
+            }
+          },
+            loginError ? React.createElement('div', { style: { padding: '10px 14px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '4px', marginBottom: '15px', fontSize: '0.85rem' } }, `⚠️ ${loginError}`) : null,
+            React.createElement('input', { value: u, onChange: e => setU(e.target.value), placeholder: 'Username or Email', style: { width: '100%', padding: '10px', marginBottom: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
             React.createElement('input', { type: 'password', value: p, onChange: e => setP(e.target.value), placeholder: 'Password', style: { width: '100%', padding: '10px', marginBottom: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } }),
             React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Login ➔')
           )

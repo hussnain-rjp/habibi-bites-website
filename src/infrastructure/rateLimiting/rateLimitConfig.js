@@ -22,13 +22,13 @@ export const RATE_LIMIT_CONFIG = {
    * Exponential backoff: 1s → 2s → 4s → 8s … up to 5 minutes.
    */
   auth: {
-    maxAttempts: 5,
+    maxAttempts: 20,
     windowMs: 15 * 60 * 1000,           // 15 minutes
 
     backoffBaseMs: 1000,                 // 1 second base delay
     backoffMaxMs: 5 * 60 * 1000,        // 5 minute cap
 
-    perAccountMaxAttempts: 3,
+    perAccountMaxAttempts: 20,
     perAccountWindowMs: 10 * 60 * 1000, // 10 minutes per username
   },
 
