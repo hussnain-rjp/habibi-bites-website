@@ -203,14 +203,25 @@
         try {
           const { data, error } = await supabaseClient.from('menu_items').select('*');
           if (!error && data && data.length > 0) {
-            const mapped = data.map(item => ({
-              id: item.id,
-              name: item.name,
-              category: item.category,
-              description: item.description,
-              prices: typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices,
-              image: item.image
-            }));
+            const mapped = data.map(item => {
+              let imagePath = item.image || '';
+              if (imagePath.startsWith('data:') && imagePath.length > 300) {
+                const cat = (item.category || '').toLowerCase();
+                if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
+                else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
+                else if (cat.includes('desi') || cat.includes('karahi')) imagePath = 'assets/desi_karahi.png';
+                else if (cat.includes('starter') || cat.includes('fries')) imagePath = 'assets/starters_loaded_fries.png';
+                else imagePath = 'assets/hero_food_collage.png';
+              }
+              return {
+                id: item.id,
+                name: item.name,
+                category: item.category,
+                description: item.description,
+                prices: typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices,
+                image: imagePath
+              };
+            });
             writeStore(DB_KEYS.MENU_ITEMS, mapped);
             return mapped;
           }
@@ -1803,7 +1814,11 @@
             )
           ),
           React.createElement('div', { style: { maxHeight: '450px', overflowY: 'auto' } },
-            menuItems.filter(i => i.category === selectedCategory).map(item => React.createElement('div', { key: item.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-elevated)', marginBottom: '8px', borderRadius: '4px', border: editingItem?.id === item.id ? '1px solid var(--accent)' : '1px solid var(--border)' } },
+            menuItems.filter(i => {
+              const cat = (i.category || '').toLowerCase().trim();
+              const sel = (selectedCategory || '').toLowerCase().trim();
+              return cat === sel || cat.includes(sel) || sel.includes(cat);
+            }).map(item => React.createElement('div', { key: item.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--bg-elevated)', marginBottom: '8px', borderRadius: '4px', border: editingItem?.id === item.id ? '1px solid var(--accent)' : '1px solid var(--border)' } },
               React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
                 React.createElement('img', { src: item.image || '/assets/hero_food_collage.png', alt: item.name, style: { width: '44px', height: '44px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-light)' } }),
                 React.createElement('div', null,
