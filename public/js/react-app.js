@@ -213,7 +213,8 @@
       let localItems = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : (window.HABIBI_MENU ? window.HABIBI_MENU.items : []));
 
       if (supabaseClient) {
-        supabaseClient.from('menu_items').select('*').then(({ data, error }) => {
+        try {
+          const { data, error } = await supabaseClient.from('menu_items').select('*');
           if (!error && data && data.length > 0) {
             const mapped = data.map(item => {
               let imagePath = item.image || '';
@@ -243,15 +244,22 @@
               window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
             }
             writeStore(DB_KEYS.MENU_ITEMS, mapped);
+            return mapped;
           }
-        }).catch(err => console.warn("Supabase getMenuItems background sync:", err));
+        } catch (err) {
+          console.warn("Supabase getMenuItems fallback:", err);
+        }
       }
       return localItems;
     }
     async saveMenuItem(item) {
-      const items = await readStore(DB_KEYS.MENU_ITEMS) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
+      const items = (await readStore(DB_KEYS.MENU_ITEMS)) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
       const idx = items.findIndex(i => String(i.id) === String(item.id));
       if (idx !== -1) items[idx] = item; else items.push(item);
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+        window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = items;
+      }
       writeStore(DB_KEYS.MENU_ITEMS, items);
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
@@ -269,16 +277,15 @@
             name: item.name,
             category: item.category,
             description: item.description || '',
-            prices: item.prices,
+            prices: typeof item.prices === 'object' ? JSON.stringify(item.prices) : item.prices,
             image: imagePath
           };
           const { error } = await supabaseClient.from('menu_items').upsert(payload);
           if (error) {
-            console.warn("Supabase saveMenuItem fallback (stringified prices):", error.message);
-            await supabaseClient.from('menu_items').upsert({ ...payload, prices: JSON.stringify(item.prices) });
+            console.warn("Supabase saveMenuItem error:", error.message);
           }
         } catch (err) {
-          console.warn("Supabase saveMenuItem error:", err);
+          console.warn("Supabase saveMenuItem catch:", err);
         }
       }
       return item;
