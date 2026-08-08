@@ -245,13 +245,20 @@
 
       if (supabaseClient) {
         try {
+          let imagePath = item.image || '';
+          if (imagePath.startsWith('data:') && imagePath.length > 250000) {
+            const cat = (item.category || '').toLowerCase();
+            if (cat.includes('pizza')) imagePath = 'assets/pizza_tikka.png';
+            else if (cat.includes('burger')) imagePath = 'assets/burger_bomba.png';
+            else imagePath = 'assets/hero_food_collage.png';
+          }
           const payload = {
-            id: item.id,
+            id: String(item.id),
             name: item.name,
             category: item.category,
-            description: item.description,
+            description: item.description || '',
             prices: item.prices,
-            image: item.image
+            image: imagePath
           };
           const { error } = await supabaseClient.from('menu_items').upsert(payload);
           if (error) {
@@ -1574,7 +1581,29 @@
       if (file) {
         const reader = new FileReader();
         reader.onloadend = () => {
-          setItemImg(reader.result); // Base64 Data URL
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxDim = 400;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.70);
+            setItemImg(compressed);
+          };
+          img.src = reader.result;
         };
         reader.readAsDataURL(file);
       }
