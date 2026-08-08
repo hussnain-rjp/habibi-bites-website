@@ -1051,25 +1051,24 @@
   }
 
   function MenuView({ addToCart, onCustomize }) {
-    const [items, setItems] = useState([]);
+    const initialItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE && window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] && window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS].length > 0) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : ((readStore(DB_KEYS.MENU_ITEMS) && readStore(DB_KEYS.MENU_ITEMS).length > 0) ? readStore(DB_KEYS.MENU_ITEMS) : (window.HABIBI_MENU ? window.HABIBI_MENU.items : []));
+    const [items, setItems] = useState(initialItems);
     const [activeCat, setActiveCat] = useState('pizza');
     const [discountRule, setDiscountRule] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
       const load = () => {
         repo.getMenuItems().then(res => {
-          setItems(res);
+          if (res && res.length > 0) setItems(res);
           setLoading(false);
-        });
+        }).catch(() => setLoading(false));
         repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
       };
       load();
       window.addEventListener('storage_changed', load);
       window.addEventListener('storage', load);
-      const timer = setInterval(load, 4000);
       return () => {
-        clearInterval(timer);
         window.removeEventListener('storage_changed', load);
         window.removeEventListener('storage', load);
       };
@@ -1162,14 +1161,15 @@
   }
 
   function DealsView({ addToCart }) {
-    const [deals, setDeals] = useState([]);
+    const initialDeals = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE && window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] && window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS].length > 0) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : ((readStore(DB_KEYS.DEALS) && readStore(DB_KEYS.DEALS).length > 0) ? readStore(DB_KEYS.DEALS) : (window.HABIBI_DEALS ? window.HABIBI_DEALS : []));
+    const [deals, setDeals] = useState(initialDeals);
     const [discountRule, setDiscountRule] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     useEffect(() => {
       repo.getDeals().then(res => {
-        setDeals(res);
+        if (res && res.length > 0) setDeals(res);
         setLoading(false);
-      });
+      }).catch(() => setLoading(false));
       const loadDisc = () => repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
       loadDisc();
       window.addEventListener('storage_changed', loadDisc);
