@@ -581,12 +581,25 @@
     async loginAdmin(u, p) {
       if (supabaseClient) {
         try {
-          const email = u.includes('@') ? u : `${u}@habibibites.com`;
-          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: p });
-          if (error || !data?.session?.user) {
+          let email = u.includes('@') ? u : `${u}@habibibites.com`;
+          let res = await supabaseClient.auth.signInWithPassword({ email, password: p });
+
+          if ((res.error || !res.data?.session?.user) && !u.includes('@')) {
+            const alt1 = await supabaseClient.auth.signInWithPassword({ email: 'habibibites@gmail.com', password: p });
+            if (!alt1.error && alt1.data?.session?.user) {
+              res = alt1;
+            } else {
+              const alt2 = await supabaseClient.auth.signInWithPassword({ email: u, password: p });
+              if (!alt2.error && alt2.data?.session?.user) {
+                res = alt2;
+              }
+            }
+          }
+
+          if (res.error || !res.data?.session?.user) {
             return false;
           }
-          const user = data.session.user;
+          const user = res.data.session.user;
           const { data: adminRecord } = await supabaseClient
             .from('admin_users')
             .select('role')

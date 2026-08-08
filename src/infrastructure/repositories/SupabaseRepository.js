@@ -368,17 +368,30 @@ export class SupabaseRepository extends IRepository {
     // Check per-device AND per-account rate limits (with exponential backoff)
     checkAuthRateLimit(username);
 
-    const email = username.includes('@') ? username : `${username}@habibibites.com`;
+    let email = username.includes('@') ? username : `${username}@habibibites.com`;
 
     try {
-      const { data, error } = await this.client.auth.signInWithPassword({ email, password });
+      let res = await this.client.auth.signInWithPassword({ email, password });
 
-      if (error || !data?.session?.user) {
-        recordAuthFailure(username);
-        throw new Error(error?.message || 'Invalid credentials');
+      // Multi-email fallback if username has no @
+      if ((res.error || !res.data?.session?.user) && !username.includes('@')) {
+        const alt1 = await this.client.auth.signInWithPassword({ email: 'habibibites@gmail.com', password });
+        if (!alt1.error && alt1.data?.session?.user) {
+          res = alt1;
+        } else {
+          const alt2 = await this.client.auth.signInWithPassword({ email: username, password });
+          if (!alt2.error && alt2.data?.session?.user) {
+            res = alt2;
+          }
+        }
       }
 
-      const user = data.session.user;
+      if (res.error || !res.data?.session?.user) {
+        recordAuthFailure(username);
+        throw new Error(res.error?.message || 'Invalid credentials');
+      }
+
+      const user = res.data.session.user;
       
       // Server-side Role Check via admin_users table with email fallback
       const { data: adminRecord } = await this.client
