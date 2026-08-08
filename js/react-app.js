@@ -261,7 +261,7 @@
             category: item.category,
             description: item.description || '',
             prices: typeof item.prices === 'object' ? JSON.stringify(item.prices) : item.prices,
-            image: imagePath
+            image: item.image || ''
           };
           const { error } = await supabaseClient.from('menu_items').upsert(payload);
           if (error) {
@@ -274,13 +274,17 @@
       return item;
     }
     async deleteMenuItem(id) {
-      const items = (await readStore(DB_KEYS.MENU_ITEMS) || []).filter(i => String(i.id) !== String(id));
+      const items = ((await readStore(DB_KEYS.MENU_ITEMS)) || []).filter(i => String(i.id) !== String(id));
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+        window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = items;
+      }
       writeStore(DB_KEYS.MENU_ITEMS, items);
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
-          const { error } = await supabaseClient.from('menu_items').delete().eq('id', id);
+          const { error } = await supabaseClient.from('menu_items').delete().eq('id', String(id));
           if (error) console.warn("Supabase deleteMenuItem error:", error.message);
         } catch (err) {
           console.warn("Supabase deleteMenuItem fallback:", err);
