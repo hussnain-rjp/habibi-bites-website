@@ -7,12 +7,16 @@ export const Home = ({ setActivePage }) => {
   const [featuredDeals, setFeaturedDeals] = useState([]);
   const [discountRule, setDiscountRule] = useState(null);
   const [restInfo, setRestInfo] = useState(null);
+  const [themeEnabled, setThemeEnabled] = useState(false);
 
   useEffect(() => {
     loadDeals();
     const loadDisc = () => {
       db.getDiscountSettings().then(setDiscountRule).catch(() => {});
       db.getRestaurantInfo().then(setRestInfo).catch(() => {});
+      if (db.getSeasonalTheme) {
+        db.getSeasonalTheme().then(res => setThemeEnabled(!!res.enabled)).catch(() => {});
+      }
     };
     loadDisc();
     window.addEventListener('storage_changed', loadDisc);
@@ -34,6 +38,12 @@ export const Home = ({ setActivePage }) => {
       <section className="hero-section">
         <div className="hero-container">
           <div className="hero-content">
+            {themeEnabled && (
+              <div className="azaadi-hero-banner">
+                <span>🇵🇰</span>
+                <span>🎉 14th August Azaadi Special — Happy Independence Day!</span>
+              </div>
+            )}
             <span className="hero-tag">🔥 Now Delivering in Qila Didar Singh</span>
             <h1 className="hero-title">Delicious Food <br/>Served with <span>Passion</span></h1>
             <p className="hero-desc">{heroDescription}</p>

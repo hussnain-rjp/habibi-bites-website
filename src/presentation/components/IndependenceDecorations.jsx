@@ -44,6 +44,21 @@ export const IndependenceDecorations = () => {
     };
   }, [db]);
 
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (enabled) {
+        document.body.classList.add('azaadi-theme-active');
+      } else {
+        document.body.classList.remove('azaadi-theme-active');
+      }
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('azaadi-theme-active');
+      }
+    };
+  }, [enabled]);
+
   if (!enabled) return null;
 
   return (

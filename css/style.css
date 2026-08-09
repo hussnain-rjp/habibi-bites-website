@@ -2761,6 +2761,46 @@ img {
   50% { transform: translateY(-12px) rotate(-3deg); }
 }
 
+/* 🇵🇰 Pakistan Azaadi (Independence Day) Festive Theme Styling */
+body.azaadi-theme-active .section-subtitle {
+  color: #25d366 !important;
+  text-shadow: 0 0 10px rgba(37, 211, 102, 0.35);
+}
+
+body.azaadi-theme-active .btn-primary {
+  border: 1px solid #25d366 !important;
+  box-shadow: 0 0 16px rgba(37, 211, 102, 0.25) !important;
+}
+
+body.azaadi-theme-active .deal-card {
+  border: 1px solid rgba(37, 211, 102, 0.45) !important;
+  box-shadow: 0 6px 24px rgba(0, 64, 26, 0.45) !important;
+}
+
+body.azaadi-theme-active .deal-card-badge {
+  background: linear-gradient(135deg, #00401a, #25d366) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(0, 64, 26, 0.5) !important;
+}
+
+.azaadi-hero-banner {
+  background: linear-gradient(135deg, rgba(0, 64, 26, 0.9), rgba(37, 211, 102, 0.3));
+  border: 1.5px solid #25d366;
+  color: #ffffff;
+  padding: 8px 18px;
+  border-radius: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  box-shadow: 0 0 20px rgba(37, 211, 102, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+
 
 
 

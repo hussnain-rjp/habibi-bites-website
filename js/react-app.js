@@ -1111,7 +1111,20 @@
         window.removeEventListener('storage_changed', handleStorageChange);
         window.removeEventListener('storage', handleStorageChange);
       };
-    }, []);
+    useEffect(() => {
+      if (typeof document !== 'undefined') {
+        if (enabled) {
+          document.body.classList.add('azaadi-theme-active');
+        } else {
+          document.body.classList.remove('azaadi-theme-active');
+        }
+      }
+      return () => {
+        if (typeof document !== 'undefined') {
+          document.body.classList.remove('azaadi-theme-active');
+        }
+      };
+    }, [enabled]);
 
     if (!enabled) return null;
 
@@ -1330,10 +1343,14 @@
     const [discountRule, setDiscountRule] = useState(null);
     const [restInfo, setRestInfo] = useState(null);
     const [homeDeals, setHomeDeals] = useState([]);
+    const [azaadiTheme, setAzaadiTheme] = useState(false);
     useEffect(() => {
       const loadData = () => {
         repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
         repo.getRestaurantInfo().then(setRestInfo).catch(() => {});
+        if (repo.getSeasonalTheme) {
+          repo.getSeasonalTheme().then(res => setAzaadiTheme(!!res.enabled)).catch(() => {});
+        }
         repo.getDeals().then(data => {
           if (data && data.length > 0) {
             const featured = data.filter(d => d.show_on_home || d.showOnHome);
@@ -1356,6 +1373,10 @@
       React.createElement('section', { className: 'hero-section' },
         React.createElement('div', { className: 'hero-container' },
           React.createElement('div', { className: 'hero-content' },
+            azaadiTheme ? React.createElement('div', { className: 'azaadi-hero-banner' },
+              React.createElement('span', null, '🇵🇰'),
+              React.createElement('span', null, '🎉 14th August Azaadi Special — Happy Independence Day!')
+            ) : null,
             React.createElement('span', { className: 'hero-tag' }, '🔥 Now Delivering in Qila Didar Singh'),
             React.createElement('h1', { className: 'hero-title' }, 'Delicious Food ', React.createElement('br'), 'Served with ', React.createElement('span', null, 'Passion')),
             React.createElement('p', { className: 'hero-desc' }, heroDesc),
