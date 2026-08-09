@@ -211,18 +211,18 @@
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : null;
       let storeItems = readStore(DB_KEYS.MENU_ITEMS);
       let fallbackItems = (window.HABIBI_MENU && Array.isArray(window.HABIBI_MENU.items)) ? window.HABIBI_MENU.items : [];
-      let localItems = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : fallbackItems);
+      let localItems = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackItems);
 
       if (supabaseClient) {
         supabaseClient.from('menu_items').select('*').then(({ data, error }) => {
-          if (!error && Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data)) {
             const mapped = data.map(item => {
               let parsedPrices = item.prices;
               if (typeof item.prices === 'string') {
                 try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
               }
               return {
-                id: item.id,
+                id: String(item.id),
                 name: item.name,
                 category: item.category,
                 description: item.description,
@@ -231,24 +231,15 @@
               };
             });
 
-            const supabaseIds = new Set(mapped.map(m => String(m.id)));
-            localItems.forEach(loc => {
-              if (loc && loc.id && !supabaseIds.has(String(loc.id))) {
-                mapped.push(loc);
-              }
-            });
-
-            if (mapped.length > 0) {
-              if (typeof window !== 'undefined') {
-                window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-                window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
-              }
-              writeStore(DB_KEYS.MENU_ITEMS, mapped);
+            if (typeof window !== 'undefined') {
+              window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+              window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
             }
+            writeStore(DB_KEYS.MENU_ITEMS, mapped);
           }
         }).catch(err => console.warn("Supabase getMenuItems background sync:", err));
       }
-      return (localItems && localItems.length > 0) ? localItems : fallbackItems;
+      return (localItems !== null && localItems !== undefined) ? localItems : fallbackItems;
     }
     async saveMenuItem(item) {
       const storeData = readStore(DB_KEYS.MENU_ITEMS);
@@ -283,18 +274,38 @@
       return item;
     }
     async deleteMenuItem(id) {
-      const items = ((await readStore(DB_KEYS.MENU_ITEMS)) || []).filter(i => String(i.id) !== String(id));
+      const targetId = String(id);
+      const items = ((readStore(DB_KEYS.MENU_ITEMS)) || []).filter(i => String(i.id) !== targetId);
       if (typeof window !== 'undefined') {
         window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
         window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = items;
       }
       writeStore(DB_KEYS.MENU_ITEMS, items);
+
+      // Cascade delete related invoice history entries referencing this item
+      const orders = readStore(DB_KEYS.ORDERS) || [];
+      const updatedOrders = orders.filter(o => {
+        if (!Array.isArray(o.items)) return true;
+        return !o.items.some(it => String(it.id) === targetId);
+      });
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE[DB_KEYS.ORDERS] = updatedOrders;
+      }
+      writeStore(DB_KEYS.ORDERS, updatedOrders);
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
-          const { error } = await supabaseClient.from('menu_items').delete().eq('id', String(id));
-          if (error) console.warn("Supabase deleteMenuItem error:", error.message);
+          await supabaseClient.from('menu_items').delete().eq('id', targetId);
+          const { data: allOrders } = await supabaseClient.from('orders').select('id, items');
+          if (allOrders && allOrders.length > 0) {
+            const orderIdsToDelete = allOrders
+              .filter(o => Array.isArray(o.items) && o.items.some(it => String(it.id) === targetId))
+              .map(o => o.id);
+            if (orderIdsToDelete.length > 0) {
+              await supabaseClient.from('orders').delete().in('id', orderIdsToDelete);
+            }
+          }
         } catch (err) {
           console.warn("Supabase deleteMenuItem fallback:", err);
         }
@@ -304,12 +315,12 @@
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : null;
       let storeItems = readStore(DB_KEYS.DEALS);
       let fallbackDeals = (window.HABIBI_DEALS && Array.isArray(window.HABIBI_DEALS)) ? window.HABIBI_DEALS : [];
-      let localDeals = (memoryItems && memoryItems.length > 0) ? memoryItems : ((storeItems && storeItems.length > 0) ? storeItems : fallbackDeals);
+      let localDeals = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackDeals);
 
       if (supabaseClient) {
         try {
           const { data, error } = await supabaseClient.from('deals').select('*').order('id', { ascending: true });
-          if (!error && Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data)) {
             if (typeof window !== 'undefined') {
               window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
               window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = data;
@@ -321,20 +332,24 @@
           console.warn("Supabase getDeals fallback:", err);
         }
       }
-      return (localDeals && localDeals.length > 0) ? localDeals : fallbackDeals;
+      return (localDeals !== null && localDeals !== undefined) ? localDeals : fallbackDeals;
     }
 
     async saveDeal(deal) {
-      const deals = (await readStore(DB_KEYS.DEALS)) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []);
+      const deals = (readStore(DB_KEYS.DEALS)) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []);
       const idx = deals.findIndex(d => String(d.id) === String(deal.id));
       if (idx !== -1) deals[idx] = deal; else deals.push(deal);
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+        window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = deals;
+      }
       writeStore(DB_KEYS.DEALS, deals);
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
           const payload = {
-            id: deal.id,
+            id: String(deal.id),
             name: deal.name,
             tag: deal.tag || 'Special',
             contents: deal.contents || '',
@@ -353,19 +368,63 @@
     }
 
     async deleteDeal(id) {
-      const deals = ((await readStore(DB_KEYS.DEALS)) || []).filter(d => String(d.id) !== String(id));
+      const targetId = String(id);
+      const deals = ((readStore(DB_KEYS.DEALS)) || []).filter(d => String(d.id) !== targetId);
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+        window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = deals;
+      }
       writeStore(DB_KEYS.DEALS, deals);
+
+      // Cascade delete related invoice history entries referencing this deal
+      const orders = readStore(DB_KEYS.ORDERS) || [];
+      const updatedOrders = orders.filter(o => {
+        if (!Array.isArray(o.items)) return true;
+        return !o.items.some(it => String(it.id) === targetId);
+      });
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE[DB_KEYS.ORDERS] = updatedOrders;
+      }
+      writeStore(DB_KEYS.ORDERS, updatedOrders);
       if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
-          const { error } = await supabaseClient.from('deals').delete().eq('id', id);
-          if (error) console.warn("Supabase deleteDeal error:", error.message);
+          await supabaseClient.from('deals').delete().eq('id', targetId);
+          const { data: allOrders } = await supabaseClient.from('orders').select('id, items');
+          if (allOrders && allOrders.length > 0) {
+            const orderIdsToDelete = allOrders
+              .filter(o => Array.isArray(o.items) && o.items.some(it => String(it.id) === targetId))
+              .map(o => o.id);
+            if (orderIdsToDelete.length > 0) {
+              await supabaseClient.from('orders').delete().in('id', orderIdsToDelete);
+            }
+          }
         } catch (err) {
           console.warn("Supabase deleteDeal error:", err);
         }
       }
     }
+    async deleteOrder(id) {
+      const targetId = String(id).toUpperCase().trim();
+      const orders = (readStore(DB_KEYS.ORDERS) || []).filter(o => String(o.id).toUpperCase().trim() !== targetId);
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+        window.__HABIBI_MEMORY_STORE[DB_KEYS.ORDERS] = orders;
+      }
+      writeStore(DB_KEYS.ORDERS, orders);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+
+      if (supabaseClient) {
+        try {
+          await supabaseClient.from('orders').delete().eq('id', String(id));
+        } catch (err) {
+          console.warn("Supabase deleteOrder error:", err);
+        }
+      }
+      return true;
+    }
+
     async getOrders() {
       let localOrders = readStore(DB_KEYS.ORDERS) || [];
       if (supabaseClient) {
