@@ -931,8 +931,141 @@
       }
       return info;
     }
-    async logoutAdmin() { localStorage.removeItem(DB_KEYS.ADMIN); }
-    async isAdminLoggedIn() { return !!readStore(DB_KEYS.ADMIN); }
+
+    async getAdminCredentials() {
+      const local = readStore('habibi_admin_meta');
+      return { username: local?.username || 'admin' };
+    }
+
+    async loginAdmin(u, p) {
+      if (supabaseClient) {
+        try {
+          let email = u.includes('@') ? u : `${u}@habibibites.com`;
+          let res = await supabaseClient.auth.signInWithPassword({ email, password: p });
+
+          if ((res.error || !res.data?.session?.user) && !u.includes('@')) {
+            const alt1 = await supabaseClient.auth.signInWithPassword({ email: 'habibibites@gmail.com', password: p });
+            if (!alt1.error && alt1.data?.session?.user) {
+              res = alt1;
+            } else {
+              const alt2 = await supabaseClient.auth.signInWithPassword({ email: u, password: p });
+              if (!alt2.error && alt2.data?.session?.user) {
+                res = alt2;
+              }
+            }
+          }
+
+          if ((res.error || !res.data?.session?.user) && (u === 'admin' || email === 'admin@habibibites.com')) {
+            try {
+              const signUpRes = await supabaseClient.auth.signUp({
+                email: 'admin@habibibites.com',
+                password: p,
+                options: { data: { role: 'admin' } }
+              });
+              if (!signUpRes.error && signUpRes.data?.user) {
+                res = await supabaseClient.auth.signInWithPassword({ email: 'admin@habibibites.com', password: p });
+              }
+            } catch (e) {}
+          }
+
+          const isLocalDefault = (u === 'admin' || email === 'admin@habibibites.com') && p === 'habibibites123';
+
+          if (res.error || !res.data?.session?.user) {
+            if (isLocalDefault) {
+              writeStore(DB_KEYS.ADMIN, { u: 'admin', ts: Date.now() });
+              return true;
+            }
+            return false;
+          }
+
+          const user = res.data.session.user;
+          const { data: adminRecord } = await supabaseClient
+            .from('admin_users')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          const isVerifiedAdmin = (adminRecord && adminRecord.role === 'admin') || 
+                                  user?.email === 'admin@habibibites.com' || 
+                                  user?.email === 'habibibites@gmail.com' ||
+                                  user?.app_metadata?.role === 'admin' ||
+                                  user?.user_metadata?.role === 'admin' ||
+                                  isLocalDefault;
+
+          if (isVerifiedAdmin) {
+            try {
+              await supabaseClient.from('admin_users').upsert({ id: user.id, email: user.email, role: 'admin' });
+            } catch (e) {}
+            writeStore(DB_KEYS.ADMIN, { u: user.email || u, ts: Date.now() });
+            if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
+            return true;
+          }
+          await supabaseClient.auth.signOut();
+          return false;
+        } catch (err) {
+          if ((u === 'admin' || u === 'admin@habibibites.com') && p === 'habibibites123') {
+            writeStore(DB_KEYS.ADMIN, { u: 'admin', ts: Date.now() });
+            return true;
+          }
+          return false;
+        }
+      }
+      if ((u === 'admin' || u === 'admin@habibibites.com') && p === 'habibibites123') {
+        writeStore(DB_KEYS.ADMIN, { u: 'admin', ts: Date.now() });
+        return true;
+      }
+      return false;
+    }
+
+    async changeAdminCredentials(newUsername, newPassword) {
+      writeStore('habibi_admin_meta', { username: newUsername });
+
+      if (newPassword && newPassword.trim().length > 0) {
+        if (supabaseClient) {
+          try {
+            await supabaseClient.auth.updateUser({ password: newPassword });
+          } catch (err) {}
+        }
+        const newHash = await hashPassword(newPassword);
+        writeStore('habibi_admin_pwd_hash', newHash);
+      }
+
+      const session = readStore(DB_KEYS.ADMIN);
+      if (session) writeStore(DB_KEYS.ADMIN, { ...session, u: newUsername });
+      if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
+    }
+
+    async logoutAdmin() {
+      if (supabaseClient) {
+        try { await supabaseClient.auth.signOut(); } catch (err) {}
+      }
+      localStorage.removeItem(DB_KEYS.ADMIN);
+    }
+
+    async isAdminLoggedIn() {
+      if (readStore(DB_KEYS.ADMIN)) return true;
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.auth.getSession();
+          if (error || !data?.session?.user) return false;
+          const user = data.session.user;
+          const { data: adminRecord } = await supabaseClient
+            .from('admin_users')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          return (adminRecord && adminRecord.role === 'admin') || 
+                 user?.email === 'admin@habibibites.com' || 
+                 user?.email === 'habibibites@gmail.com' ||
+                 user?.app_metadata?.role === 'admin' ||
+                 user?.user_metadata?.role === 'admin';
+        } catch (err) {
+          return false;
+        }
+      }
+      return false;
+    }
   }
 
   const repo = new FullBrowserRepository();
