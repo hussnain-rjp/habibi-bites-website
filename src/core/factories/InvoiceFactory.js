@@ -65,13 +65,12 @@ export class InvoiceFactory {
           table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 3px 0; }
           td, th { padding: 2px 0; color: #000000; word-break: break-word; }
           .logo-img {
-            width: 44px;
-            height: 44px;
+            width: 68px;
+            height: 68px;
             object-fit: contain;
-            border-radius: 50%;
             display: block;
-            margin: 0 auto 3px auto;
-            filter: contrast(180%) grayscale(100%);
+            margin: 0 auto 4px auto;
+            filter: contrast(200%) grayscale(100%);
           }
         </style>
       </head>
