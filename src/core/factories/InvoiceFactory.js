@@ -117,4 +117,120 @@ export class InvoiceFactory {
       </html>
     `;
   }
+
+  static createDailyReportHTML(reportDate, orders) {
+    const selectedDateOrders = (orders || []).filter(o => {
+      const dateStr = (o.createdAt || o.created_at || '').split('T')[0];
+      return dateStr === reportDate;
+    });
+
+    const reportTotalSales = selectedDateOrders
+      .filter(o => o.status !== 'cancelled')
+      .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+    const reportDeliveredSales = selectedDateOrders
+      .filter(o => o.status === 'delivered')
+      .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+    const reportDeliveredCount = selectedDateOrders.filter(o => o.status === 'delivered').length;
+    const reportCancelledCount = selectedDateOrders.filter(o => o.status === 'cancelled').length;
+    const reportActiveCount = selectedDateOrders.filter(o => ['received', 'queue', 'cooking', 'packing', 'delivery'].includes(o.status)).length;
+
+    const codTotal = selectedDateOrders
+      .filter(o => o.status !== 'cancelled' && (!o.payment || o.payment.toLowerCase().includes('cash')))
+      .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+    const onlineTotal = selectedDateOrders
+      .filter(o => o.status !== 'cancelled' && (o.payment && !o.payment.toLowerCase().includes('cash')))
+      .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+    const avgOrderVal = selectedDateOrders.length > 0 ? (reportTotalSales / selectedDateOrders.length).toFixed(0) : 0;
+
+    const itemSalesMap = {};
+    selectedDateOrders.forEach(o => {
+      if (o.status === 'cancelled') return;
+      (o.items || []).forEach(it => {
+        const key = it.name || 'Custom Item';
+        if (!itemSalesMap[key]) itemSalesMap[key] = { name: key, qty: 0, total: 0 };
+        itemSalesMap[key].qty += (it.quantity || 1);
+        itemSalesMap[key].total += (parseFloat(it.price || 0) * (it.quantity || 1));
+      });
+    });
+    const topItemsList = Object.values(itemSalesMap).sort((a, b) => b.total - a.total);
+
+    const topItemsHTML = topItemsList.map((item, idx) => `
+      <tr>
+        <td style="padding: 3px 0; font-weight: bold; width: 50%; word-break: break-word;">${idx + 1}. ${item.name}</td>
+        <td style="text-align: center; width: 18%;">${item.qty} pcs</td>
+        <td style="text-align: right; width: 32%; font-weight: bold;">Rs. ${item.total.toLocaleString()}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Daily Sales Report ${reportDate}</title>
+        <style>
+          @page { size: portrait; margin: 0; }
+          @media print {
+            html, body { width: 230px !important; margin: 0 auto !important; padding: 4px !important; }
+          }
+          * { box-sizing: border-box; }
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            width: 230px;
+            margin: 0 auto;
+            padding: 6px;
+            color: #000;
+            background: #fff;
+            font-size: 10.5px;
+            line-height: 1.3;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .divider { border-bottom: 1.5px solid #000; margin: 5px 0; }
+          table { width: 100%; border-collapse: collapse; margin: 3px 0; table-layout: fixed; }
+          td, th { padding: 2px 0; word-break: break-word; }
+          .logo-img { width: 48px; height: 48px; object-fit: contain; display: block; margin: 0 auto 3px auto; filter: contrast(200%) grayscale(100%); }
+        </style>
+      </head>
+      <body>
+        <img src="assets/logo.png" alt="Logo" class="logo-img" />
+        <div class="center bold" style="font-size: 14px;">HABIBI BITES</div>
+        <div class="center bold" style="font-size: 11px;">DAILY SALES REPORT</div>
+        <div class="center" style="font-size: 10px;">Date: ${reportDate}</div>
+        <div class="divider"></div>
+        <table>
+          <tr><td><strong>Total Sales:</strong></td><td style="text-align: right; font-weight: bold;">Rs. ${reportTotalSales.toLocaleString()}</td></tr>
+          <tr><td>Delivered Revenue:</td><td style="text-align: right;">Rs. ${reportDeliveredSales.toLocaleString()}</td></tr>
+          <tr><td>Total Orders:</td><td style="text-align: right;">${selectedDateOrders.length}</td></tr>
+          <tr><td>Delivered Orders:</td><td style="text-align: right;">${reportDeliveredCount}</td></tr>
+          <tr><td>Active Queue:</td><td style="text-align: right;">${reportActiveCount}</td></tr>
+          <tr><td>Cancelled Orders:</td><td style="text-align: right;">${reportCancelledCount}</td></tr>
+          <tr><td>COD Total:</td><td style="text-align: right;">Rs. ${codTotal.toLocaleString()}</td></tr>
+          <tr><td>Online Transfer:</td><td style="text-align: right;">Rs. ${onlineTotal.toLocaleString()}</td></tr>
+          <tr><td>Avg Order Value:</td><td style="text-align: right; font-weight: bold;">Rs. ${avgOrderVal}</td></tr>
+        </table>
+        <div class="divider"></div>
+        <div class="bold" style="font-size: 10.5px; margin-bottom: 3px;">ITEM SALES BREAKDOWN</div>
+        <table>
+          <thead>
+            <tr style="border-bottom: 1.5px solid #000;">
+              <th style="text-align: left; width: 50%;">Item</th>
+              <th style="text-align: center; width: 18%;">Qty</th>
+              <th style="text-align: right; width: 32%;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${topItemsHTML || '<tr><td colspan="3" style="text-align: center;">No items sold</td></tr>'}
+          </tbody>
+        </table>
+        <div class="divider"></div>
+        <div class="center bold" style="font-size: 9.5px;">End of Report — Habibi Bites POS</div>
+      </body>
+      </html>
+    `;
+  }
 }
+

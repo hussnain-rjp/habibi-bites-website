@@ -17,7 +17,9 @@ export const AdminPage = () => {
   const backoffTimer = useRef(null);
 
   const [orders, setOrders] = useState([]);
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [pendingReviews, setPendingReviews] = useState([]);
+
   const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150, maxOrders: 50 });
   const [settingsFeeInput, setSettingsFeeInput] = useState(150);
   const [settingsMaxInput, setSettingsMaxInput] = useState(50);
@@ -538,7 +540,141 @@ export const AdminPage = () => {
             </table>
           </div>
         )}
-      </div>
+      {/* Daily Sales & Revenue Report Card */}
+      {(() => {
+        const selectedDateOrders = orders.filter(o => {
+          const dateStr = (o.createdAt || o.created_at || '').split('T')[0];
+          return dateStr === reportDate;
+        });
+
+        const reportTotalSales = selectedDateOrders
+          .filter(o => o.status !== 'cancelled')
+          .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+        const reportDeliveredSales = selectedDateOrders
+          .filter(o => o.status === 'delivered')
+          .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+        const reportDeliveredCount = selectedDateOrders.filter(o => o.status === 'delivered').length;
+        const reportCancelledCount = selectedDateOrders.filter(o => o.status === 'cancelled').length;
+
+        const codTotal = selectedDateOrders
+          .filter(o => o.status !== 'cancelled' && (!o.payment || o.payment.toLowerCase().includes('cash')))
+          .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+        const onlineTotal = selectedDateOrders
+          .filter(o => o.status !== 'cancelled' && (o.payment && !o.payment.toLowerCase().includes('cash')))
+          .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+
+        const avgOrderVal = selectedDateOrders.length > 0 ? (reportTotalSales / selectedDateOrders.length).toFixed(0) : 0;
+
+        const itemSalesMap = {};
+        selectedDateOrders.forEach(o => {
+          if (o.status === 'cancelled') return;
+          (o.items || []).forEach(it => {
+            const key = it.name || 'Custom Item';
+            if (!itemSalesMap[key]) itemSalesMap[key] = { name: key, qty: 0, total: 0 };
+            itemSalesMap[key].qty += (it.quantity || 1);
+            itemSalesMap[key].total += (parseFloat(it.price || 0) * (it.quantity || 1));
+          });
+        });
+        const topItemsList = Object.values(itemSalesMap).sort((a, b) => b.total - a.total);
+
+        return (
+          <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)', marginBottom: '30px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+              <h2 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.3rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>📊 Daily Sales & Revenue Analytics</span>
+                <span style={{ fontSize: '0.8rem', padding: '4px 10px', borderRadius: '20px', background: '#25d366', color: '#fff' }}>Live Synchronized</span>
+              </h2>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Select Date:</label>
+                <input
+                  type="date"
+                  value={reportDate}
+                  onChange={(e) => setReportDate(e.target.value)}
+                  style={{ padding: '8px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '8px', fontSize: '0.9rem' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setReportDate(new Date().toISOString().split('T')[0])}
+                  style={{ padding: '6px 14px', fontSize: '0.85rem' }}
+                >
+                  📅 Today
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    const html = InvoiceFactory.createDailyReportHTML(reportDate, orders);
+                    const win = window.open('', '_blank', 'width=380,height=600');
+                    if (win) {
+                      win.document.write(html);
+                      win.document.close();
+                      setTimeout(() => win.print(), 300);
+                    }
+                  }}
+                  style={{ padding: '8px 14px', fontSize: '0.85rem', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  🖨️ Print Daily Report
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ background: 'rgba(37, 211, 102, 0.12)', padding: '18px', borderRadius: '10px', border: '1px solid #25d366', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.8rem', color: '#25d366', fontWeight: 800 }}>Total Daily Sales</div>
+                <div style={{ fontSize: '1.7rem', fontWeight: 900, color: '#fff', margin: '4px 0' }}>Rs. {reportTotalSales.toLocaleString()}</div>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '18px', borderRadius: '10px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>Delivered Sales</div>
+                <div style={{ fontSize: '1.7rem', fontWeight: 900, color: '#4ade80', margin: '4px 0' }}>Rs. {reportDeliveredSales.toLocaleString()}</div>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '18px', borderRadius: '10px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>Orders Summary</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', margin: '4px 0' }}>{selectedDateOrders.length} orders</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{reportDeliveredCount} delivered | {reportCancelledCount} cancelled</div>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '18px', borderRadius: '10px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>Payment Method</div>
+                <div style={{ fontSize: '0.85rem', color: '#fff', marginTop: '4px', fontWeight: 700 }}>💵 COD: Rs. {codTotal.toLocaleString()}</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 700 }}>💳 Online: Rs. {onlineTotal.toLocaleString()}</div>
+              </div>
+              <div style={{ background: 'var(--bg-elevated)', padding: '18px', borderRadius: '10px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 800 }}>Average Order Value</div>
+                <div style={{ fontSize: '1.7rem', fontWeight: 900, color: 'var(--accent)', margin: '4px 0' }}>Rs. {avgOrderVal}</div>
+              </div>
+            </div>
+
+            <h3 style={{ color: 'var(--accent)', marginBottom: '14px', fontSize: '1.1rem', fontWeight: 800 }}>🍔 Top Selling Items & Combos on {reportDate}</h3>
+            {topItemsList.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No orders recorded for {reportDate}.</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '10px' }}>Item Name</th>
+                      <th style={{ padding: '10px', textAlign: 'center' }}>Quantity Sold</th>
+                      <th style={{ padding: '10px', textAlign: 'right' }}>Total Revenue Generated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topItemsList.map((item, idx) => (
+                      <tr key={item.name} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '12px 10px', fontWeight: 800 }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + '.'} {item.name}</td>
+                        <td style={{ padding: '12px 10px', textAlign: 'center', fontWeight: 800, color: 'var(--accent)' }}>{item.qty} pcs</td>
+                        <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 800, color: '#4ade80' }}>Rs. {item.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Secondary Management Cards (Delivery Settings, Discount Manager, & Reviews Moderation) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
