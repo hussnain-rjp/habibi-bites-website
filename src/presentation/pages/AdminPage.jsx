@@ -255,7 +255,7 @@ export const AdminPage = () => {
 
   const handlePrintInvoice = (order) => {
     const html = InvoiceFactory.createPrintableHTML(order);
-    const win = window.open('', '_blank', 'width=350,height=600');
+    const win = window.open('', '_blank', 'width=340,height=500');
     win.document.write(html);
     win.document.close();
     win.focus();
