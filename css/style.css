@@ -2762,42 +2762,94 @@ img {
 }
 
 /* 🇵🇰 Pakistan Azaadi (Independence Day) Festive Theme Styling */
+body.azaadi-theme-active {
+  --primary: #25d366 !important;
+  --primary-glow: rgba(37, 211, 102, 0.25) !important;
+}
+
+body.azaadi-theme-active .hero-title {
+  text-shadow: 0 0 20px rgba(37, 211, 102, 0.45);
+}
+
+body.azaadi-theme-active .hero-title span {
+  color: #25d366 !important;
+  background: linear-gradient(135deg, #ffffff 0%, #25d366 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 body.azaadi-theme-active .section-subtitle {
   color: #25d366 !important;
   text-shadow: 0 0 10px rgba(37, 211, 102, 0.35);
 }
 
+body.azaadi-theme-active .section-title::after {
+  content: ' 🇵🇰';
+  font-size: 0.85em;
+}
+
 body.azaadi-theme-active .btn-primary {
+  background: linear-gradient(135deg, #00401a 0%, #25d366 100%) !important;
   border: 1px solid #25d366 !important;
-  box-shadow: 0 0 16px rgba(37, 211, 102, 0.25) !important;
+  box-shadow: 0 0 18px rgba(37, 211, 102, 0.35) !important;
+  color: #ffffff !important;
+}
+
+body.azaadi-theme-active .btn-primary:hover {
+  box-shadow: 0 0 26px rgba(37, 211, 102, 0.6) !important;
+  transform: translateY(-2px);
 }
 
 body.azaadi-theme-active .deal-card {
-  border: 1px solid rgba(37, 211, 102, 0.45) !important;
-  box-shadow: 0 6px 24px rgba(0, 64, 26, 0.45) !important;
+  border: 1.5px solid rgba(37, 211, 102, 0.55) !important;
+  box-shadow: 0 6px 24px rgba(0, 64, 26, 0.5) !important;
 }
 
 body.azaadi-theme-active .deal-card-badge {
   background: linear-gradient(135deg, #00401a, #25d366) !important;
   color: #ffffff !important;
   font-weight: 800 !important;
-  box-shadow: 0 2px 8px rgba(0, 64, 26, 0.5) !important;
+  box-shadow: 0 2px 8px rgba(0, 64, 26, 0.6) !important;
+}
+
+body.azaadi-theme-active .food-card {
+  border-bottom: 2px solid rgba(37, 211, 102, 0.3);
+}
+
+body.azaadi-theme-active .food-card:hover {
+  border-color: #25d366 !important;
+  box-shadow: 0 8px 25px rgba(37, 211, 102, 0.25) !important;
+}
+
+body.azaadi-theme-active .navbar {
+  border-bottom: 2px solid #00401a !important;
+}
+
+body.azaadi-theme-active .cart-btn {
+  border-color: #25d366 !important;
+  box-shadow: 0 0 12px rgba(37, 211, 102, 0.3) !important;
 }
 
 .azaadi-hero-banner {
-  background: linear-gradient(135deg, rgba(0, 64, 26, 0.9), rgba(37, 211, 102, 0.3));
+  background: linear-gradient(135deg, rgba(0, 64, 26, 0.95), rgba(37, 211, 102, 0.4));
   border: 1.5px solid #25d366;
   color: #ffffff;
-  padding: 8px 18px;
+  padding: 8px 20px;
   border-radius: 30px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 700;
   margin-bottom: 16px;
-  box-shadow: 0 0 20px rgba(37, 211, 102, 0.35);
-  backdrop-filter: blur(6px);
+  box-shadow: 0 0 24px rgba(37, 211, 102, 0.45);
+  backdrop-filter: blur(8px);
+  animation: pulseAzaadiGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes pulseAzaadiGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(37, 211, 102, 0.35); }
+  50% { box-shadow: 0 0 28px rgba(37, 211, 102, 0.7); }
 }
 
 
