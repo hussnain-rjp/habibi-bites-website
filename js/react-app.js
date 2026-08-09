@@ -1111,6 +1111,8 @@
         window.removeEventListener('storage_changed', handleStorageChange);
         window.removeEventListener('storage', handleStorageChange);
       };
+    }, []);
+
     useEffect(() => {
       if (typeof document !== 'undefined') {
         if (enabled) {
