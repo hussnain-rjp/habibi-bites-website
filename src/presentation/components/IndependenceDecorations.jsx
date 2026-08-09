@@ -54,28 +54,30 @@ export const IndependenceDecorations = () => {
           position: 'fixed',
           top: 0,
           left: 0,
+          right: 0,
           width: '100%',
-          height: '26px',
+          height: '38px',
           zIndex: 102,
           pointerEvents: 'none',
           overflow: 'hidden',
           display: 'flex',
-          justify: 'space-around',
+          justify: 'space-between',
           alignItems: 'flex-start',
-          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+          filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))'
         }}
       >
-        {Array.from({ length: 18 }).map((_, idx) => (
+        {Array.from({ length: 45 }).map((_, idx) => (
           <div 
             key={idx} 
             style={{ 
               animation: `buntingSway ${3 + (idx % 3) * 0.5}s ease-in-out infinite ${(idx % 4) * 0.2}s`, 
-              transformOrigin: 'top center' 
+              transformOrigin: 'top center',
+              flexShrink: 0
             }}
           >
             {idx % 2 === 0 ? (
               // Green Bunting
-              <svg width="22" height="30" viewBox="0 0 24 32" fill="none">
+              <svg width="26" height="36" viewBox="0 0 24 32" fill="none">
                 <polygon points="0,0 24,0 12,32" fill="#00401A" />
                 <circle cx="12" cy="11" r="4.5" fill="#FFFFFF" />
                 <circle cx="13.2" cy="10" r="3.8" fill="#00401A" />
@@ -83,7 +85,7 @@ export const IndependenceDecorations = () => {
               </svg>
             ) : (
               // White Bunting
-              <svg width="22" height="30" viewBox="0 0 24 32" fill="none">
+              <svg width="26" height="36" viewBox="0 0 24 32" fill="none">
                 <polygon points="0,0 24,0 12,32" fill="#FFFFFF" />
                 <circle cx="12" cy="11" r="4.5" fill="#00401A" />
                 <circle cx="13.2" cy="10" r="3.8" fill="#FFFFFF" />
