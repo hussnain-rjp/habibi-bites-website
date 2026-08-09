@@ -1975,6 +1975,7 @@
     const [feeInput, setFeeInput] = useState(150);
     const [maxInput, setMaxInput] = useState(50);
     const [enabledInput, setEnabledInput] = useState(false);
+    const [seasonalThemeInput, setSeasonalThemeInput] = useState(true);
 
     // Discount Settings
     const [discEnabled, setDiscEnabled] = useState(false);
@@ -2096,6 +2097,10 @@
 
         const s = await repo.getDeliverySettings();
         setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
+        if (repo.getSeasonalTheme) {
+          const theme = await repo.getSeasonalTheme();
+          setSeasonalThemeInput(theme.enabled);
+        }
         const disc = await repo.getDiscountSettings();
         setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
         setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
@@ -2873,23 +2878,61 @@
         )
       ) : null,
 
-      // TAB 4: DELIVERY & CAPACITY SETTINGS
-      adminTab === 'settings' ? React.createElement('div', { style: { maxWidth: '480px', background: 'var(--bg-panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' } },
-        React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Delivery & Capacity Settings'),
-        React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); await repo.saveDeliverySettings(enabledInput, feeInput, maxInput); const s = await repo.getDeliverySettings(); setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled); alert("✅ Delivery settings saved! All devices will update automatically."); } },
-          React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', cursor: 'pointer' } },
-            React.createElement('input', { type: 'checkbox', checked: enabledInput, onChange: e => setEnabledInput(e.target.checked) }),
-            React.createElement('span', { style: { fontWeight: 'bold' } }, 'Enable Delivery Charges')
-          ),
-          React.createElement('div', { style: { marginBottom: '14px' } },
-            React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Delivery Fee (Rs.)'),
-            React.createElement('input', { type: 'number', value: feeInput, onChange: e => setFeeInput(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
-          ),
-          React.createElement('div', { style: { marginBottom: '20px' } },
-            React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Max Kitchen Orders Cap'),
-            React.createElement('input', { type: 'number', value: maxInput, onChange: e => setMaxInput(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
-          ),
-          React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Save Settings 💾')
+      // TAB 4: DELIVERY & CAPACITY SETTINGS & SEASONAL THEME
+      adminTab === 'settings' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' } },
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: '10px', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0, marginBottom: '8px' } }, '🇵🇰 Seasonal Independence Day Theme'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '16px', marginTop: 0 } }, 'Show Independence Day Decorations (Floating flags, top bunting streamers jhandiyan, & balloons) across the site.'),
+          React.createElement('div', {
+            onClick: async () => {
+              const next = !seasonalThemeInput;
+              setSeasonalThemeInput(next);
+              if (repo.saveSeasonalTheme) {
+                await repo.saveSeasonalTheme(next);
+              } else {
+                const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
+                const parsed = JSON.parse(raw);
+                parsed.seasonal_theme_enabled = next;
+                localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
+                window.dispatchEvent(new Event('storage_changed'));
+              }
+            },
+            style: {
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 18px', cursor: 'pointer', borderRadius: '10px',
+              background: seasonalThemeInput ? 'rgba(37, 211, 102, 0.15)' : 'var(--bg-elevated)',
+              border: `2px solid ${seasonalThemeInput ? '#25d366' : 'var(--border)'}`,
+              transition: 'all 0.2s ease'
+            }
+          },
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+              React.createElement('span', { style: { fontSize: '1.3rem' } }, seasonalThemeInput ? '🇵🇰' : '⚪'),
+              React.createElement('span', { style: { fontWeight: 800, fontSize: '0.95rem', color: seasonalThemeInput ? '#25d366' : '#fff' } },
+                seasonalThemeInput ? 'Independence Theme: ON' : 'Independence Theme: OFF'
+              )
+            ),
+            React.createElement('div', { style: { width: '48px', height: '26px', borderRadius: '20px', background: seasonalThemeInput ? '#25d366' : '#4b5563', position: 'relative', transition: 'all 0.2s ease' } },
+              React.createElement('div', { style: { width: '20px', height: '20px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: seasonalThemeInput ? '25px' : '3px', transition: 'all 0.2s ease' } })
+            )
+          )
+        ),
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: '10px', border: '1px solid var(--border)' } },
+          React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Delivery & Capacity Settings'),
+          React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); await repo.saveDeliverySettings(enabledInput, feeInput, maxInput); const s = await repo.getDeliverySettings(); setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled); alert("✅ Delivery settings saved! All devices will update automatically."); } },
+            React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', cursor: 'pointer' } },
+              React.createElement('input', { type: 'checkbox', checked: enabledInput, onChange: e => setEnabledInput(e.target.checked) }),
+              React.createElement('span', { style: { fontWeight: 'bold' } }, 'Enable Delivery Charges')
+            ),
+            React.createElement('div', { style: { marginBottom: '14px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Delivery Fee (Rs.)'),
+              React.createElement('input', { type: 'number', value: feeInput, onChange: e => setFeeInput(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('div', { style: { marginBottom: '20px' } },
+              React.createElement('label', { style: { display: 'block', fontSize: '0.85rem', marginBottom: '4px' } }, 'Max Kitchen Orders Cap'),
+              React.createElement('input', { type: 'number', value: maxInput, onChange: e => setMaxInput(e.target.value), style: { width: '100%', padding: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '4px' } })
+            ),
+            React.createElement('button', { type: 'submit', className: 'btn btn-primary', style: { width: '100%', justifyContent: 'center' } }, 'Save Settings 💾')
+          )
         )
       ) : null,
 
