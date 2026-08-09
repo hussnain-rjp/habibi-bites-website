@@ -326,32 +326,11 @@
     }
   }
 
-  const DEFAULT_ORDERS = [
-    {
-      id: "HB-5103",
-      customer: { name: "Mustafa Chaudhry", phone: "03009876543", address: "Model Town, Gujranwala" },
-      items: [{ id: 1, name: "Habibi Special Pizza (LARGE)", price: 1600, quantity: 1 }],
-      total: 1750,
-      deliveryFee: 150,
-      status: "cooking",
-      createdAt: new Date().toISOString(),
-      updates: [{ stage: "received", time: new Date().toISOString() }, { stage: "cooking", time: new Date().toISOString() }]
-    },
-    {
-      id: "HB-5102",
-      customer: { name: "Ali Raza", phone: "03216543210", address: "Gondlanwala Road, Gujranwala" },
-      items: [{ id: 10, name: "Zinger Burger Deal 10", price: 650, quantity: 2 }],
-      total: 1300,
-      deliveryFee: 0,
-      status: "delivered",
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      updates: [{ stage: "received", time: new Date().toISOString() }, { stage: "delivered", time: new Date().toISOString() }]
-    }
-  ];
+  const DEFAULT_ORDERS = [];
 
   class FullBrowserRepository {
     constructor() {
-      if (!readStore(DB_KEYS.ORDERS) || (readStore(DB_KEYS.ORDERS) || []).length === 0) writeStore(DB_KEYS.ORDERS, DEFAULT_ORDERS);
+      if (readStore(DB_KEYS.ORDERS) === null || readStore(DB_KEYS.ORDERS) === undefined) writeStore(DB_KEYS.ORDERS, []);
       if (!readStore(DB_KEYS.REVIEWS)) writeStore(DB_KEYS.REVIEWS, DEFAULT_REVIEWS);
       if (!readStore(DB_KEYS.LAST_ORDER_ID)) writeStore(DB_KEYS.LAST_ORDER_ID, 5103);
       if (!readStore(DB_KEYS.SETTINGS)) writeStore(DB_KEYS.SETTINGS, { enabled: false, fee: 150, maxOrders: 50 });
@@ -584,7 +563,7 @@
             .from('orders')
             .select('*')
             .order('created_at', { ascending: false });
-          if (!error && data && data.length > 0) {
+          if (!error && Array.isArray(data)) {
             const mapped = data.map(o => {
               let cust = o.customer;
               if (typeof cust === 'string') {
