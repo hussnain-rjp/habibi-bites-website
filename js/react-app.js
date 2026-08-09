@@ -3679,9 +3679,7 @@
     const [qty, setQty] = useState(1);
 
     const crusts = [
-      { id: 'normal', name: 'Standard Pan Crust', price: 0 },
-      { id: 'cheese_crust', name: 'Cheese Stuffed Crust', price: 250 },
-      { id: 'kabab_crust', name: 'Kabab Stuffed Crust', price: 350 }
+      { id: 'normal', name: 'Standard Pan Crust', price: 0 }
     ];
 
     const availableAddons = window.HABIBI_MENU?.addons || [
@@ -3723,7 +3721,7 @@
               }, `${s}`, React.createElement('br'), React.createElement('span', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, `Rs. ${item.prices[s]}`)))
             )
           ) : null,
-          (item.category === 'pizza' || item.category === 'special_pizza') ? React.createElement('div', { style: { marginBottom: '20px' } },
+          ((item.category === 'pizza' || item.category === 'special_pizza') && crusts.length > 1) ? React.createElement('div', { style: { marginBottom: '20px' } },
             React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '2. Select Stuffed Crust Option:'),
             React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
               crusts.map(c => React.createElement('label', {
