@@ -1118,8 +1118,8 @@
     return React.createElement('div', { className: 'independence-theme-wrapper', style: { pointerEvents: 'none', userSelect: 'none' } },
       React.createElement('div', {
         style: {
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '30px',
-          zIndex: 9999, pointerEvents: 'none', overflow: 'hidden', display: 'flex',
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '26px',
+          zIndex: 102, pointerEvents: 'none', overflow: 'hidden', display: 'flex',
           justify: 'space-around', alignItems: 'flex-start', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
         }
       },

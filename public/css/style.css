@@ -224,12 +224,16 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
+  z-index: 105;
 }
 
 .logo-wrapper {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 105;
 }
 
 .logo-icon {
