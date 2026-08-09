@@ -75,8 +75,9 @@ export const ContactPage = () => {
 
           <div style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
             <h3 style={{ color: 'var(--accent)', marginTop: 0 }}>📞 Phone & WhatsApp</h3>
-            <p style={{ color: 'var(--text-muted)', margin: 0 }}>Hotline: 0300-1234567 / 0321-7654321</p>
+            <p style={{ color: 'var(--text-muted)', margin: 0 }}>Hotline: 0302-4411700</p>
           </div>
+
 
           <div style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
             <h3 style={{ color: 'var(--accent)', marginTop: 0 }}>⏰ Kitchen Operating Hours</h3>

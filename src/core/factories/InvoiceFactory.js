@@ -44,7 +44,7 @@ export class InvoiceFactory {
         <div class="center bold" style="font-size: 16px;">HABIBI BITES</div>
         <div class="center">Fast Food & Traditional Kitchen</div>
         <div class="center">Qila Didar Singh, Gujranwala</div>
-        <div class="center">Ph: 0300-1234567</div>
+        <div class="center">Ph: 0302-4411700</div>
         <div class="divider"></div>
         <div><span class="bold">Order ID:</span> ${order.id}</div>
         <div><span class="bold">Date:</span> ${dateFormatted}</div>

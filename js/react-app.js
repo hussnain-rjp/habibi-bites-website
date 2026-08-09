@@ -46,7 +46,7 @@
         <div class="center bold" style="font-size: 16px;">HABIBI BITES</div>
         <div class="center">Fast Food & Traditional Kitchen</div>
         <div class="center">Qila Didar Singh, Gujranwala</div>
-        <div class="center">Ph: 0300-1234567</div>
+        <div class="center">Ph: 0302-4411700</div>
         <div class="divider"></div>
         <div><span class="bold">Order ID:</span> ${order.id}</div>
         <div><span class="bold">Date:</span> ${dateFormatted}</div>
@@ -2924,7 +2924,7 @@
       e.preventDefault();
       if (!cName.trim() || !cMsg.trim()) return;
       const text = `Hi Habibi Bites! 👋\n\nName: ${cName.trim()}\nEmail: ${cEmail.trim() || 'N/A'}\n\nMessage:\n${cMsg.trim()}`;
-      const waUrl = `https://wa.me/923001234567?text=${encodeURIComponent(text)}`;
+      const waUrl = `https://wa.me/923024411700?text=${encodeURIComponent(text)}`;
       window.open(waUrl, '_blank');
     };
 
@@ -2982,7 +2982,7 @@
           React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Have questions or need help with your order? Reach us through any channel below.'),
           [
             { icon: '📍', label: 'Address', value: 'Main Boulevard, Qila Didar Singh, Gujranwala, Punjab, Pakistan.' },
-            { icon: '📞', label: 'Phone', value: '0300-1234567 / 0321-7654321' },
+            { icon: '📞', label: 'Phone', value: '0302-4411700' },
             { icon: '🕐', label: 'Hours', value: '12:00 PM – 2:00 AM (Daily)' },
             { icon: '📧', label: 'Email', value: 'habibibites@gmail.com' }
           ].map(item =>
