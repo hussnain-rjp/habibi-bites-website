@@ -31,7 +31,10 @@ function readStore(key) {
 
 function writeStore(key, data) {
   try {
-    localStorage.setItem(key, JSON.stringify(data));
+    const newStr = JSON.stringify(data);
+    const existing = localStorage.getItem(key);
+    if (existing === newStr) return;
+    localStorage.setItem(key, newStr);
     window.dispatchEvent(new Event("storage_changed"));
   } catch (e) {
     console.error("Storage Write Error", e);

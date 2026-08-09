@@ -1,0 +1,45 @@
+$kind: http-request
+method: POST
+url: '{{supabaseUrl}}/rest/v1/reviews'
+order: 6000
+headers:
+  - key: 'apikey'
+    value: '{{supabaseAnonKey}}'
+  - key: 'Authorization'
+    value: 'Bearer {{supabaseAnonKey}}'
+  - key: 'Accept'
+    value: 'application/json'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Prefer'
+    value: 'return=representation'
+body:
+  type: json
+  content: |-
+    {
+      "name": "Test Reviewer",
+      "rating": 5,
+      "comment": "This is a valid automated test review.",
+      "date": "{{$isoTimestamp}}",
+      "approved": false
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is success for create review', function () {
+        pm.expect([200, 201]).to.include(pm.response.code);
+      });
+
+      pm.test('Created review is unapproved by default in this test', function () {
+        const data = pm.response.json();
+        const row = Array.isArray(data) ? data[0] : data;
+        pm.expect(row.approved).to.eql(false);
+      });
+
+      pm.test('Created review contains rating and comment', function () {
+        const data = pm.response.json();
+        const row = Array.isArray(data) ? data[0] : data;
+        pm.expect(row.rating).to.eql(5);
+        pm.expect(row.comment).to.be.a('string').and.not.empty;
+      });

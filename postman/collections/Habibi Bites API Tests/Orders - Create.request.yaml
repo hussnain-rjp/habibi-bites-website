@@ -1,0 +1,65 @@
+$kind: http-request
+method: POST
+url: '{{supabaseUrl}}/rest/v1/orders'
+order: 5000
+headers:
+  - key: 'apikey'
+    value: '{{supabaseAnonKey}}'
+  - key: 'Authorization'
+    value: 'Bearer {{supabaseAnonKey}}'
+  - key: 'Accept'
+    value: 'application/json'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Prefer'
+    value: 'return=representation'
+body:
+  type: json
+  content: |-
+    {
+      "id": "{{newOrderId}}",
+      "customer": {
+        "name": "Ali Khan",
+        "phone": "0300-1234567",
+        "address": "Street 12, Qila Didar Singh, Gujranwala"
+      },
+      "items": [
+        {
+          "id": "1",
+          "name": "Test Item",
+          "quantity": 1,
+          "price": 500
+        }
+      ],
+      "total": 500,
+      "delivery_fee": 0,
+      "status": "received",
+      "payment": "Cash on Delivery",
+      "created_at": "{{$isoTimestamp}}",
+      "updates": [
+        {
+          "stage": "received",
+          "time": "{{$isoTimestamp}}"
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is success for create order', function () {
+        pm.expect([200, 201]).to.include(pm.response.code);
+      });
+
+      pm.test('Created order echoes expected id', function () {
+        const data = pm.response.json();
+        const row = Array.isArray(data) ? data[0] : data;
+        pm.expect(row.id).to.eql(pm.variables.get('newOrderId'));
+      });
+
+      pm.test('Created order contains customer and status', function () {
+        const data = pm.response.json();
+        const row = Array.isArray(data) ? data[0] : data;
+        pm.expect(row.customer).to.be.an('object');
+        pm.expect(row.status).to.eql('received');
+      });

@@ -1,0 +1,30 @@
+$kind: http-request
+method: GET
+url: '{{supabaseUrl}}/rest/v1/reviews?approved=eq.true&select=*&order=date.desc'
+order: 3000
+headers:
+  - key: 'apikey'
+    value: '{{supabaseAnonKey}}'
+  - key: 'Authorization'
+    value: 'Bearer {{supabaseAnonKey}}'
+  - key: 'Accept'
+    value: 'application/json'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test('Approved reviews response is an array', function () {
+        const data = pm.response.json();
+        pm.expect(data).to.be.an('array');
+      });
+
+      pm.test('Returned reviews are approved', function () {
+        const data = pm.response.json();
+        data.forEach(function (review) {
+          pm.expect(review.approved).to.eql(true);
+        });
+      });

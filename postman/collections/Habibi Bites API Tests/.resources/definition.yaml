@@ -1,0 +1,17 @@
+$kind: collection
+name: 'Habibi Bites API Tests'
+variables:
+  - key: 'supabaseUrl'
+    value: 'https://wgsssibktygkwyicdtlr.supabase.co'
+  - key: 'supabaseAnonKey'
+    value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indnc3NzaWJrdHlna3d5aWNkdGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxMjEwNDYsImV4cCI6MjEwMTY5NzA0Nn0.EYAek-TmMZ_oE1t9jRdcZjlfcNC3e77rTPMGh0jgFRo'
+  - key: 'orderId'
+    value: 'HB-5104'
+  - key: 'newOrderId'
+    value: 'HB-9999'
+  - key: 'adminEmail'
+    value: 'admin@habibibites.com'
+  - key: 'adminPassword'
+    value: 'replace-with-admin-password'
+  - key: 'adminAccessToken'
+    value: ''

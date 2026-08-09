@@ -52,3 +52,4 @@ walkthrough.md
 
 # Log Files
 *.log
+/.postman

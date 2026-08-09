@@ -1,0 +1,30 @@
+$kind: http-request
+method: GET
+url: '{{supabaseUrl}}/rest/v1/orders?id=eq.{{orderId}}&select=*'
+order: 4000
+headers:
+  - key: 'apikey'
+    value: '{{supabaseAnonKey}}'
+  - key: 'Authorization'
+    value: 'Bearer {{supabaseAnonKey}}'
+  - key: 'Accept'
+    value: 'application/json'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test('Order lookup returns an array', function () {
+        const data = pm.response.json();
+        pm.expect(data).to.be.an('array');
+      });
+
+      pm.test('If an order is returned, it matches the requested id', function () {
+        const data = pm.response.json();
+        if (data.length > 0) {
+          pm.expect(data[0].id).to.eql(pm.variables.get('orderId'));
+        }
+      });

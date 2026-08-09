@@ -270,7 +270,13 @@
       window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
       window.__HABIBI_MEMORY_STORE[key] = data;
     }
-    try { localStorage.setItem(key, JSON.stringify(data)); window.dispatchEvent(new Event("storage_changed")); } catch (e) {}
+    try {
+      const newStr = JSON.stringify(data);
+      const existing = localStorage.getItem(key);
+      if (existing === newStr) return;
+      localStorage.setItem(key, newStr);
+      window.dispatchEvent(new Event("storage_changed"));
+    } catch (e) {}
   }
 
   // Standard SHA-256 password hasher for secure offline verification
@@ -328,6 +334,13 @@
 
   const DEFAULT_ORDERS = [];
 
+  const FETCH_TTL = 15000; // 15s SWR cache window
+
+  if (typeof window !== 'undefined') {
+    window.__HABIBI_INFLIGHT = window.__HABIBI_INFLIGHT || {};
+    window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
+  }
+
   class FullBrowserRepository {
     constructor() {
       if (readStore(DB_KEYS.ORDERS) === null || readStore(DB_KEYS.ORDERS) === undefined) writeStore(DB_KEYS.ORDERS, []);
@@ -337,51 +350,55 @@
       if (!readStore(DB_KEYS.MENU_ITEMS) && window.HABIBI_MENU) writeStore(DB_KEYS.MENU_ITEMS, window.HABIBI_MENU.items || []);
       if (!readStore(DB_KEYS.DEALS) && window.HABIBI_DEALS) writeStore(DB_KEYS.DEALS, window.HABIBI_DEALS || []);
     }
+
     async getMenuItems() {
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : null;
       let storeItems = readStore(DB_KEYS.MENU_ITEMS);
       let fallbackItems = (window.HABIBI_MENU && Array.isArray(window.HABIBI_MENU.items)) ? window.HABIBI_MENU.items : [];
       let localItems = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackItems);
 
-      if (supabaseClient) {
-        supabaseClient.from('menu_items').select('*').then(({ data, error }) => {
-          if (!error && Array.isArray(data)) {
-            const mapped = data.map(item => {
-              let parsedPrices = item.prices;
-              if (typeof item.prices === 'string') {
-                try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
-              }
-              return {
-                id: String(item.id),
-                name: item.name,
-                category: item.category,
-                description: item.description,
-                prices: parsedPrices,
-                image: item.image || ''
-              };
-            });
+      const now = Date.now();
+      const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.MENU_ITEMS] || 0) : 0;
 
+      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+        if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS]) {
+          window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS] = supabaseClient.from('menu_items').select('*').then(({ data, error }) => {
             if (typeof window !== 'undefined') {
-              window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-              window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = mapped;
+              window.__HABIBI_LAST_FETCH[DB_KEYS.MENU_ITEMS] = Date.now();
+              delete window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS];
             }
-            writeStore(DB_KEYS.MENU_ITEMS, mapped);
-          }
-        }).catch(err => console.warn("Supabase getMenuItems background sync:", err));
+            if (!error && Array.isArray(data)) {
+              const mapped = data.map(item => {
+                let parsedPrices = item.prices;
+                if (typeof item.prices === 'string') {
+                  try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
+                }
+                return {
+                  id: String(item.id),
+                  name: item.name,
+                  category: item.category,
+                  description: item.description,
+                  prices: parsedPrices,
+                  image: item.image || ''
+                };
+              });
+              writeStore(DB_KEYS.MENU_ITEMS, mapped);
+            }
+          }).catch(err => {
+            if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS];
+          });
+        }
       }
       return (localItems !== null && localItems !== undefined) ? localItems : fallbackItems;
     }
+
     async saveMenuItem(item) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.MENU_ITEMS] = 0;
       const storeData = readStore(DB_KEYS.MENU_ITEMS);
       const items = (storeData && storeData.length > 0) ? [...storeData] : (window.HABIBI_MENU ? [...window.HABIBI_MENU.items] : []);
       const idx = items.findIndex(i => String(i.id) === String(item.id));
       if (idx !== -1) items[idx] = item; else items.unshift(item);
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-        window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = items;
-      }
       writeStore(DB_KEYS.MENU_ITEMS, items);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
@@ -393,36 +410,24 @@
             prices: typeof item.prices === 'object' ? JSON.stringify(item.prices) : item.prices,
             image: item.image || ''
           };
-          const { error } = await supabaseClient.from('menu_items').upsert(payload);
-          if (error) {
-            console.warn("Supabase saveMenuItem error:", error.message);
-          }
-        } catch (err) {
-          console.warn("Supabase saveMenuItem catch:", err);
-        }
+          await supabaseClient.from('menu_items').upsert(payload);
+        } catch (err) {}
       }
       return item;
     }
+
     async deleteMenuItem(id) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.MENU_ITEMS] = 0;
       const targetId = String(id);
       const items = ((readStore(DB_KEYS.MENU_ITEMS)) || []).filter(i => String(i.id) !== targetId);
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-        window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] = items;
-      }
       writeStore(DB_KEYS.MENU_ITEMS, items);
 
-      // Cascade delete related invoice history entries referencing this item
       const orders = readStore(DB_KEYS.ORDERS) || [];
       const updatedOrders = orders.filter(o => {
         if (!Array.isArray(o.items)) return true;
         return !o.items.some(it => String(it.id) === targetId);
       });
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE[DB_KEYS.ORDERS] = updatedOrders;
-      }
       writeStore(DB_KEYS.ORDERS, updatedOrders);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
@@ -436,45 +441,43 @@
               await supabaseClient.from('orders').delete().in('id', orderIdsToDelete);
             }
           }
-        } catch (err) {
-          console.warn("Supabase deleteMenuItem fallback:", err);
-        }
+        } catch (err) {}
       }
     }
+
     async getDeals() {
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : null;
       let storeItems = readStore(DB_KEYS.DEALS);
       let fallbackDeals = (window.HABIBI_DEALS && Array.isArray(window.HABIBI_DEALS)) ? window.HABIBI_DEALS : [];
       let localDeals = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackDeals);
 
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('deals').select('*').order('id', { ascending: true });
-          if (!error && Array.isArray(data)) {
+      const now = Date.now();
+      const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.DEALS] || 0) : 0;
+
+      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+        if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.DEALS]) {
+          window.__HABIBI_INFLIGHT[DB_KEYS.DEALS] = supabaseClient.from('deals').select('*').order('id', { ascending: true }).then(({ data, error }) => {
             if (typeof window !== 'undefined') {
-              window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-              window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = data;
+              window.__HABIBI_LAST_FETCH[DB_KEYS.DEALS] = Date.now();
+              delete window.__HABIBI_INFLIGHT[DB_KEYS.DEALS];
             }
-            writeStore(DB_KEYS.DEALS, data);
-            return data;
-          }
-        } catch (err) {
-          console.warn("Supabase getDeals fallback:", err);
+            if (!error && Array.isArray(data)) {
+              writeStore(DB_KEYS.DEALS, data);
+            }
+          }).catch(err => {
+            if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.DEALS];
+          });
         }
       }
       return (localDeals !== null && localDeals !== undefined) ? localDeals : fallbackDeals;
     }
 
     async saveDeal(deal) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.DEALS] = 0;
       const deals = (readStore(DB_KEYS.DEALS)) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []);
       const idx = deals.findIndex(d => String(d.id) === String(deal.id));
       if (idx !== -1) deals[idx] = deal; else deals.push(deal);
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-        window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = deals;
-      }
       writeStore(DB_KEYS.DEALS, deals);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
@@ -488,35 +491,24 @@
             image: deal.image || 'assets/hero_food_collage.png',
             show_on_home: !!deal.show_on_home
           };
-          const { error } = await supabaseClient.from('deals').upsert(payload);
-          if (error) console.warn("Supabase saveDeal error:", error.message);
-        } catch (err) {
-          console.warn("Supabase saveDeal error:", err);
-        }
+          await supabaseClient.from('deals').upsert(payload);
+        } catch (err) {}
       }
       return deal;
     }
 
     async deleteDeal(id) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.DEALS] = 0;
       const targetId = String(id);
       const deals = ((readStore(DB_KEYS.DEALS)) || []).filter(d => String(d.id) !== targetId);
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-        window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] = deals;
-      }
       writeStore(DB_KEYS.DEALS, deals);
 
-      // Cascade delete related invoice history entries referencing this deal
       const orders = readStore(DB_KEYS.ORDERS) || [];
       const updatedOrders = orders.filter(o => {
         if (!Array.isArray(o.items)) return true;
         return !o.items.some(it => String(it.id) === targetId);
       });
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE[DB_KEYS.ORDERS] = updatedOrders;
-      }
       writeStore(DB_KEYS.ORDERS, updatedOrders);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
@@ -530,77 +522,76 @@
               await supabaseClient.from('orders').delete().in('id', orderIdsToDelete);
             }
           }
-        } catch (err) {
-          console.warn("Supabase deleteDeal error:", err);
-        }
+        } catch (err) {}
       }
     }
+
     async deleteOrder(id) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.ORDERS] = 0;
       const targetId = String(id).toUpperCase().trim();
       const orders = (readStore(DB_KEYS.ORDERS) || []).filter(o => String(o.id).toUpperCase().trim() !== targetId);
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-        window.__HABIBI_MEMORY_STORE[DB_KEYS.ORDERS] = orders;
-      }
       writeStore(DB_KEYS.ORDERS, orders);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
           await supabaseClient.from('orders').delete().eq('id', String(id));
-        } catch (err) {
-          console.warn("Supabase deleteOrder error:", err);
-        }
+        } catch (err) {}
       }
       return true;
     }
 
     async getOrders() {
       let localOrders = readStore(DB_KEYS.ORDERS) || [];
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient
+      const now = Date.now();
+      const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.ORDERS] || 0) : 0;
+
+      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+        if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.ORDERS]) {
+          window.__HABIBI_INFLIGHT[DB_KEYS.ORDERS] = supabaseClient
             .from('orders')
             .select('*')
-            .order('created_at', { ascending: false });
-          if (!error && Array.isArray(data)) {
-            const mapped = data.map(o => {
-              let cust = o.customer;
-              if (typeof cust === 'string') {
-                try { cust = JSON.parse(cust); } catch (e) {}
+            .order('created_at', { ascending: false })
+            .then(({ data, error }) => {
+              if (typeof window !== 'undefined') {
+                window.__HABIBI_LAST_FETCH[DB_KEYS.ORDERS] = Date.now();
+                delete window.__HABIBI_INFLIGHT[DB_KEYS.ORDERS];
               }
-              if (!cust && (o.customer_name || o.phone || o.name)) {
-                cust = { name: o.customer_name || o.name || 'Guest', phone: o.phone || o.customer_phone || '', address: o.address || o.delivery_address || '' };
-              }
+              if (!error && Array.isArray(data)) {
+                const mapped = data.map(o => {
+                  let cust = o.customer;
+                  if (typeof cust === 'string') {
+                    try { cust = JSON.parse(cust); } catch (e) {}
+                  }
+                  if (!cust && (o.customer_name || o.phone || o.name)) {
+                    cust = { name: o.customer_name || o.name || 'Guest', phone: o.phone || o.customer_phone || '', address: o.address || o.delivery_address || '' };
+                  }
+                  let itms = o.items;
+                  if (typeof itms === 'string') {
+                    try { itms = JSON.parse(itms); } catch (e) {}
+                  }
+                  if (!Array.isArray(itms)) itms = [];
+                  let upds = o.updates;
+                  if (typeof upds === 'string') {
+                    try { upds = JSON.parse(upds); } catch (e) {}
+                  }
+                  if (!Array.isArray(upds)) upds = [{ stage: o.status || 'received', time: o.created_at || new Date().toISOString() }];
 
-              let itms = o.items;
-              if (typeof itms === 'string') {
-                try { itms = JSON.parse(itms); } catch (e) {}
+                  return {
+                    id: String(o.id || o.order_id || 'HB-5100'),
+                    customer: cust || { name: 'Guest', phone: 'N/A', address: 'Takeaway' },
+                    items: itms,
+                    total: parseFloat(o.total || o.total_amount || 0),
+                    deliveryFee: parseFloat(o.delivery_fee || o.deliveryFee || 0),
+                    status: o.status || 'received',
+                    createdAt: o.created_at || o.createdAt || new Date().toISOString(),
+                    updates: upds
+                  };
+                });
+                writeStore(DB_KEYS.ORDERS, mapped);
               }
-              if (!Array.isArray(itms)) itms = [];
-
-              let upds = o.updates;
-              if (typeof upds === 'string') {
-                try { upds = JSON.parse(upds); } catch (e) {}
-              }
-              if (!Array.isArray(upds)) upds = [{ stage: o.status || 'received', time: o.created_at || new Date().toISOString() }];
-
-              return {
-                id: String(o.id || o.order_id || 'HB-5100'),
-                customer: cust || { name: 'Guest', phone: 'N/A', address: 'Takeaway' },
-                items: itms,
-                total: parseFloat(o.total || o.total_amount || 0),
-                deliveryFee: parseFloat(o.delivery_fee || o.deliveryFee || 0),
-                status: o.status || 'received',
-                createdAt: o.created_at || o.createdAt || new Date().toISOString(),
-                updates: upds
-              };
+            }).catch(err => {
+              if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.ORDERS];
             });
-            writeStore(DB_KEYS.ORDERS, mapped);
-            return mapped;
-          }
-        } catch (err) {
-          console.warn("Supabase fetch orders fallback to local:", err);
         }
       }
       return localOrders;
@@ -608,6 +599,7 @@
     async getOrderById(id) { const orders = await this.getOrders(); return orders.find(o => String(o.id).toUpperCase() === id.toUpperCase().trim()) || null; }
     async getOrdersByPhone(phone) { const clean = phone.replace(/[^0-9]/g, ""); const orders = await this.getOrders(); return orders.filter(o => o.customer?.phone?.replace(/[^0-9]/g, "") === clean); }
     async createOrder(customer, items, total, deliveryFee = 0) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.ORDERS] = 0;
       const settings = await this.getDeliverySettings();
       const orders = await this.getOrders();
       const activeCount = orders.filter(o => ["received", "queue", "cooking", "packing", "delivery"].includes(o.status)).length;
@@ -615,7 +607,6 @@
         throw new Error("Kitchen is at full capacity right now. Please try again shortly.");
       }
 
-      // Get next ID from Supabase to avoid collisions across devices
       let nextId = 5104;
       if (supabaseClient) {
         try {
@@ -630,7 +621,6 @@
           }
         } catch (e) {}
       }
-      // Fallback to local if Supabase unreachable
       const localLast = parseInt(readStore(DB_KEYS.LAST_ORDER_ID)) || 5103;
       if (nextId <= localLast) nextId = localLast + 1;
       writeStore(DB_KEYS.LAST_ORDER_ID, nextId);
@@ -662,7 +652,6 @@
           };
           const { error } = await supabaseClient.from('orders').insert([payload]);
           if (error) {
-            console.warn("Supabase direct insert fallback to stringified JSON:", error.message);
             await supabaseClient.from('orders').insert([{
               ...payload,
               customer: JSON.stringify(customer),
@@ -670,13 +659,12 @@
               updates: JSON.stringify(newOrder.updates)
             }]);
           }
-        } catch (err) {
-          console.warn("Supabase insert order fallback:", err);
-        }
+        } catch (err) {}
       }
       return newOrder;
     }
     async updateOrderStatus(orderId, newStatus) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.ORDERS] = 0;
       const orders = await this.getOrders();
       const idx = orders.findIndex(o => String(o.id).toUpperCase() === orderId.toUpperCase().trim());
       if (idx !== -1) {
@@ -693,124 +681,149 @@
               .from('orders')
               .update({ status: newStatus, updates: JSON.stringify(orders[idx].updates) })
               .eq('id', orderId);
-          } catch (err) {
-            console.warn("Supabase status update fallback:", err);
-          }
+          } catch (err) {}
         }
       }
       return orders[idx];
     }
     async clearAllOrders() {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.ORDERS] = 0;
       writeStore(DB_KEYS.ORDERS, []);
       localStorage.removeItem(DB_KEYS.LAST_ORDER_ID);
       if (supabaseClient) {
         try {
-          const { error } = await supabaseClient.from('orders').delete().neq('id', '_none_');
-          if (error) console.warn("Supabase clearAllOrders error:", error.message);
-        } catch (err) {
-          console.warn("Supabase clearAllOrders fallback:", err);
-        }
+          await supabaseClient.from('orders').delete().neq('id', '_none_');
+        } catch (err) {}
       }
       return [];
     }
     async getReviews() {
       let localRevs = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => r.approved);
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('reviews').select('*').eq('approved', true).order('date', { ascending: false });
-          if (!error && data) return data;
-        } catch (err) {
-          console.warn("Supabase getReviews fallback:", err);
+      const now = Date.now();
+      const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.REVIEWS] || 0) : 0;
+
+      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+        if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.REVIEWS]) {
+          window.__HABIBI_INFLIGHT[DB_KEYS.REVIEWS] = supabaseClient.from('reviews').select('*').order('date', { ascending: false }).then(({ data, error }) => {
+            if (typeof window !== 'undefined') {
+              window.__HABIBI_LAST_FETCH[DB_KEYS.REVIEWS] = Date.now();
+              delete window.__HABIBI_INFLIGHT[DB_KEYS.REVIEWS];
+            }
+            if (!error && Array.isArray(data)) {
+              writeStore(DB_KEYS.REVIEWS, data);
+            }
+          }).catch(err => {
+            if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.REVIEWS];
+          });
         }
       }
       return localRevs;
     }
     async getPendingReviews() {
       let localRevs = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => !r.approved);
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('reviews').select('*').eq('approved', false).order('date', { ascending: false });
-          if (!error && data) return data;
-        } catch (err) {
-          console.warn("Supabase getPendingReviews fallback:", err);
-        }
-      }
       return localRevs;
     }
     async addReview(name, rating, comment) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.REVIEWS] = 0;
       const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS;
       const rev = { id: Date.now(), name, rating: parseInt(rating)||5, comment, date: new Date().toISOString().split('T')[0], approved: false };
       all.unshift(rev);
       writeStore(DB_KEYS.REVIEWS, all);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
-          const { data, error } = await supabaseClient.from('reviews').insert([{
+          await supabaseClient.from('reviews').insert([{
             name: rev.name,
             rating: rev.rating,
             comment: rev.comment,
             date: rev.date,
             approved: false
-          }]).select().single();
-          if (error) console.warn("Supabase addReview error:", error.message);
-          else if (data) return data;
-        } catch (err) {
-          console.warn("Supabase addReview fallback:", err);
-        }
+          }]);
+        } catch (err) {}
       }
       return rev;
     }
     async approveReview(id) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.REVIEWS] = 0;
       const all = readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS;
       const idx = all.findIndex(r => String(r.id) === String(id));
       if (idx !== -1) { all[idx].approved = true; writeStore(DB_KEYS.REVIEWS, all); }
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
-          const { error } = await supabaseClient.from('reviews').update({ approved: true }).eq('id', id);
-          if (error) console.warn("Supabase approveReview error:", error.message);
-        } catch (err) {
-          console.warn("Supabase approveReview fallback:", err);
-        }
+          await supabaseClient.from('reviews').update({ approved: true }).eq('id', id);
+        } catch (err) {}
       }
     }
     async deleteReview(id) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.REVIEWS] = 0;
       const all = (readStore(DB_KEYS.REVIEWS) || DEFAULT_REVIEWS).filter(r => String(r.id) !== String(id));
       writeStore(DB_KEYS.REVIEWS, all);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
       if (supabaseClient) {
         try {
-          const { error } = await supabaseClient.from('reviews').delete().eq('id', id);
-          if (error) console.warn("Supabase deleteReview error:", error.message);
-        } catch (err) {
-          console.warn("Supabase deleteReview fallback:", err);
-        }
+          await supabaseClient.from('reviews').delete().eq('id', id);
+        } catch (err) {}
       }
     }
+
+    async fetchSettingsDeduplicated() {
+      const now = Date.now();
+      const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] || 0) : 0;
+      let storeSettings = readStore(DB_KEYS.SETTINGS) || {};
+
+      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+        if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS]) {
+          window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS] = supabaseClient
+            .from('settings')
+            .select('*')
+            .eq('id', 1)
+            .maybeSingle()
+            .then(({ data, error }) => {
+              if (typeof window !== 'undefined') {
+                window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = Date.now();
+                delete window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS];
+              }
+              if (!error && data) {
+                let parsedDisc = data.discount_data;
+                if (typeof parsedDisc === 'string') {
+                  try { parsedDisc = JSON.parse(parsedDisc); } catch (e) { parsedDisc = null; }
+                }
+                let parsedRest = data.restaurant_info;
+                if (typeof parsedRest === 'string') {
+                  try { parsedRest = JSON.parse(parsedRest); } catch (e) { parsedRest = null; }
+                }
+                const merged = {
+                  ...storeSettings,
+                  enabled: !!data.delivery_charge_enabled,
+                  fee: parseFloat(data.delivery_charge_amount) || 0,
+                  maxOrders: parseInt(data.max_active_orders) || 50,
+                  seasonal_theme_enabled: data.seasonal_theme_enabled !== undefined ? !!data.seasonal_theme_enabled : true,
+                  discount_data: parsedDisc || storeSettings.discount_data || null,
+                  restaurant_info: parsedRest || storeSettings.restaurant_info || null
+                };
+                if (parsedRest) writeStore(DB_KEYS.RESTAURANT_INFO, parsedRest);
+                if (parsedDisc) writeStore('habibi_discount_settings', parsedDisc);
+                writeStore(DB_KEYS.SETTINGS, merged);
+              }
+            }).catch(err => {
+              if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS];
+            });
+        }
+      }
+      return storeSettings;
+    }
+
     async getDeliverySettings() {
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
-          if (!error && data) {
-            return {
-              enabled: !!data.delivery_charge_enabled,
-              fee: parseFloat(data.delivery_charge_amount) || 0,
-              maxOrders: parseInt(data.max_active_orders) || 50
-            };
-          }
-        } catch (err) {
-          console.warn("Supabase getDeliverySettings fallback to LocalStorage:", err);
-        }
-      }
-      return readStore(DB_KEYS.SETTINGS) || { enabled: false, fee: 150, maxOrders: 50 };
+      this.fetchSettingsDeduplicated();
+      const s = readStore(DB_KEYS.SETTINGS) || {};
+      return { enabled: !!s.enabled, fee: parseFloat(s.fee) || 0, maxOrders: parseInt(s.maxOrders) || 50 };
     }
+
     async saveDeliverySettings(enabled, fee, maxOrders) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
       const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
       writeStore(DB_KEYS.SETTINGS, s);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
@@ -821,31 +834,23 @@
             max_active_orders: s.maxOrders,
             discount_data: existing?.discount_data || null
           };
-          const { error } = await supabaseClient.from('settings').upsert(payload);
-          if (error) console.warn("Supabase saveDeliverySettings error:", error.message);
-        } catch (err) {
-          console.warn("Supabase saveDeliverySettings fallback:", err);
-        }
+          await supabaseClient.from('settings').upsert(payload);
+        } catch (err) {}
       }
       return s;
     }
+
     async getSeasonalTheme() {
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
-          if (!error && data && data.seasonal_theme_enabled !== undefined && data.seasonal_theme_enabled !== null) {
-            return { enabled: !!data.seasonal_theme_enabled };
-          }
-        } catch (err) {}
-      }
-      const raw = readStore(DB_KEYS.SETTINGS) || {};
-      return { enabled: raw.seasonal_theme_enabled !== undefined ? !!raw.seasonal_theme_enabled : true };
+      this.fetchSettingsDeduplicated();
+      const s = readStore(DB_KEYS.SETTINGS) || {};
+      return { enabled: s.seasonal_theme_enabled !== undefined ? !!s.seasonal_theme_enabled : true };
     }
+
     async saveSeasonalTheme(enabled) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
       const isEnabled = !!enabled;
       const current = readStore(DB_KEYS.SETTINGS) || {};
       writeStore(DB_KEYS.SETTINGS, { ...current, seasonal_theme_enabled: isEnabled });
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
@@ -862,25 +867,17 @@
       }
       return { enabled: isEnabled };
     }
+
     async getDiscountSettings() {
       const defaultDiscount = { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
-          if (!error && data && data.discount_data) {
-            const parsed = typeof data.discount_data === 'string' ? JSON.parse(data.discount_data) : data.discount_data;
-            return parsed || defaultDiscount;
-          }
-        } catch (err) {
-          console.warn("Supabase getDiscountSettings fallback to LocalStorage:", err);
-        }
-      }
+      this.fetchSettingsDeduplicated();
       const s = readStore('habibi_discount_settings');
       return s || defaultDiscount;
     }
+
     async saveDiscountSettings(data) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
       writeStore('habibi_discount_settings', data);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
@@ -891,134 +888,12 @@
             max_active_orders: existing?.max_active_orders ?? 50,
             discount_data: data
           };
-          const { error } = await supabaseClient.from('settings').upsert(payload);
-          if (error) console.warn("Supabase saveDiscountSettings error:", error.message);
-        } catch (err) {
-          console.warn("Supabase saveDiscountSettings fallback:", err);
-        }
+          await supabaseClient.from('settings').upsert(payload);
+        } catch (err) {}
       }
       return data;
     }
-    async getAdminCredentials() {
-      // NEVER return plain-text passwords or hashes to client UI
-      const local = readStore('habibi_admin_meta');
-      return { username: local?.username || 'admin' };
-    }
-    async loginAdmin(u, p) {
-      if (supabaseClient) {
-        try {
-          let email = u.includes('@') ? u : `${u}@habibibites.com`;
-          let res = await supabaseClient.auth.signInWithPassword({ email, password: p });
 
-          if ((res.error || !res.data?.session?.user) && !u.includes('@')) {
-            const alt1 = await supabaseClient.auth.signInWithPassword({ email: 'habibibites@gmail.com', password: p });
-            if (!alt1.error && alt1.data?.session?.user) {
-              res = alt1;
-            } else {
-              const alt2 = await supabaseClient.auth.signInWithPassword({ email: u, password: p });
-              if (!alt2.error && alt2.data?.session?.user) {
-                res = alt2;
-              }
-            }
-          }
-
-          // If user does not exist in Supabase Auth yet, auto-create admin@habibibites.com
-          if ((res.error || !res.data?.session?.user) && (u === 'admin' || email === 'admin@habibibites.com')) {
-            try {
-              const signUpRes = await supabaseClient.auth.signUp({
-                email: 'admin@habibibites.com',
-                password: p,
-                options: { data: { role: 'admin' } }
-              });
-              if (!signUpRes.error && signUpRes.data?.user) {
-                res = await supabaseClient.auth.signInWithPassword({ email: 'admin@habibibites.com', password: p });
-              }
-            } catch (e) {}
-          }
-
-          const isLocalDefault = (u === 'admin' || email === 'admin@habibibites.com') && p === 'habibibites123';
-
-          if (res.error || !res.data?.session?.user) {
-            if (isLocalDefault) return true;
-            return false;
-          }
-
-          const user = res.data.session.user;
-          const { data: adminRecord } = await supabaseClient
-            .from('admin_users')
-            .select('role')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          const isVerifiedAdmin = (adminRecord && adminRecord.role === 'admin') || 
-                                  user?.email === 'admin@habibibites.com' || 
-                                  user?.email === 'habibibites@gmail.com' ||
-                                  user?.app_metadata?.role === 'admin' ||
-                                  user?.user_metadata?.role === 'admin' ||
-                                  isLocalDefault;
-
-          if (isVerifiedAdmin) {
-            try {
-              await supabaseClient.from('admin_users').upsert({ id: user.id, email: user.email, role: 'admin' });
-            } catch (e) {}
-            if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
-            return true;
-          }
-          await supabaseClient.auth.signOut();
-          return false;
-        } catch (err) {
-          if ((u === 'admin' || u === 'admin@habibibites.com') && p === 'habibibites123') return true;
-          return false;
-        }
-      }
-      return (u === 'admin' || u === 'admin@habibibites.com') && p === 'habibibites123';
-    }
-    async changeAdminCredentials(newUsername, newPassword) {
-      writeStore('habibi_admin_meta', { username: newUsername });
-
-      if (newPassword && newPassword.trim().length > 0) {
-        if (supabaseClient) {
-          try {
-            await supabaseClient.auth.updateUser({ password: newPassword });
-          } catch (err) {}
-        }
-        const newHash = await hashPassword(newPassword);
-        writeStore('habibi_admin_pwd_hash', newHash);
-      }
-
-      const session = readStore(DB_KEYS.ADMIN);
-      if (session) writeStore(DB_KEYS.ADMIN, { ...session, u: newUsername });
-      if (typeof localStorage !== 'undefined') localStorage.removeItem("habibi_admin_credentials");
-    }
-    async logoutAdmin() {
-      if (supabaseClient) {
-        try { await supabaseClient.auth.signOut(); } catch (err) {}
-      }
-      localStorage.removeItem(DB_KEYS.ADMIN);
-    }
-    async isAdminLoggedIn() {
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.auth.getSession();
-          if (error || !data?.session?.user) return false;
-          const user = data.session.user;
-          const { data: adminRecord } = await supabaseClient
-            .from('admin_users')
-            .select('role')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          return (adminRecord && adminRecord.role === 'admin') || 
-                 user?.email === 'admin@habibibites.com' || 
-                 user?.email === 'habibibites@gmail.com' ||
-                 user?.app_metadata?.role === 'admin' ||
-                 user?.user_metadata?.role === 'admin';
-        } catch (err) {
-          return false;
-        }
-      }
-      return false;
-    }
     async getRestaurantInfo() {
       const defaultInfo = {
         name: 'Habibi Bites',
@@ -1029,27 +904,14 @@
         heroImage: '',
         heroText: ''
       };
-      if (supabaseClient) {
-        try {
-          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
-          if (!error && data && data.restaurant_info) {
-            const parsed = typeof data.restaurant_info === 'string' ? JSON.parse(data.restaurant_info) : data.restaurant_info;
-            if (parsed) {
-              writeStore(DB_KEYS.RESTAURANT_INFO, parsed);
-              return { ...defaultInfo, ...parsed };
-            }
-          }
-        } catch (err) {
-          console.warn("Supabase getRestaurantInfo fallback:", err);
-        }
-      }
+      this.fetchSettingsDeduplicated();
       const local = readStore(DB_KEYS.RESTAURANT_INFO);
       return local ? { ...defaultInfo, ...local } : defaultInfo;
     }
-    async saveRestaurantInfo(info) {
-      writeStore(DB_KEYS.RESTAURANT_INFO, info);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
 
+    async saveRestaurantInfo(info) {
+      if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
+      writeStore(DB_KEYS.RESTAURANT_INFO, info);
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
@@ -1063,12 +925,9 @@
           };
           const { error } = await supabaseClient.from('settings').upsert(payload);
           if (error) {
-            console.warn("Supabase saveRestaurantInfo error (trying stringified):", error.message);
             await supabaseClient.from('settings').upsert({ ...payload, restaurant_info: JSON.stringify(info) });
           }
-        } catch (err) {
-          console.warn("Supabase saveRestaurantInfo fallback:", err);
-        }
+        } catch (err) {}
       }
       return info;
     }

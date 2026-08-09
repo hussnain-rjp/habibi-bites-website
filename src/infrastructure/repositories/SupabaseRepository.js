@@ -21,15 +21,23 @@ export class SupabaseRepository extends IRepository {
   async getMenuItems() {
     let fallback = (typeof window !== 'undefined' && window.HABIBI_MENU) ? window.HABIBI_MENU.items : [];
     if (!this.client) return fallback;
+
+    const now = Date.now();
+    const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH['menu_items'] || 0) : 0;
+    const cachedData = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE['menu_items'] : null;
+
+    if (cachedData && (now - lastFetch < 15000)) {
+      return cachedData;
+    }
+
     try {
       checkRateLimit('menu', 'publicRead');
       recordAttempt('menu', 'publicRead');
       const { data, error } = await this.client.from('menu_items').select('*');
       if (error) {
         console.error("Supabase getMenuItems Error:", error.message);
-        return fallback;
+        return cachedData || fallback;
       }
-      // If table is completely empty on first initialization, auto-seed default items once
       if ((!data || data.length === 0) && !this._menuSeeded && fallback.length > 0) {
         this._menuSeeded = true;
         try {
@@ -49,8 +57,7 @@ export class SupabaseRepository extends IRepository {
         }
       }
       this._menuSeeded = true;
-      if (!data) return [];
-      return data.map(item => {
+      const mapped = (data || []).map(item => {
         let imagePath = item.image || '';
         let parsedPrices = item.prices;
         if (typeof item.prices === 'string') {
@@ -58,8 +65,16 @@ export class SupabaseRepository extends IRepository {
         }
         return { ...item, prices: parsedPrices, image: imagePath };
       });
+
+      if (typeof window !== 'undefined') {
+        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+        window.__HABIBI_MEMORY_STORE['menu_items'] = mapped;
+        window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
+        window.__HABIBI_LAST_FETCH['menu_items'] = Date.now();
+      }
+      return mapped;
     } catch (err) {
-      return fallback;
+      return cachedData || fallback;
     }
   }
 

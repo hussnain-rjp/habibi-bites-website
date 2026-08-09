@@ -1,0 +1,32 @@
+$kind: http-request
+method: GET
+url: '{{supabaseUrl}}/rest/v1/deals?select=*&order=id.asc'
+order: 2000
+headers:
+  - key: 'apikey'
+    value: '{{supabaseAnonKey}}'
+  - key: 'Authorization'
+    value: 'Bearer {{supabaseAnonKey}}'
+  - key: 'Accept'
+    value: 'application/json'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test('Deals response is an array', function () {
+        const data = pm.response.json();
+        pm.expect(data).to.be.an('array');
+      });
+
+      pm.test('Deals are sorted and shaped when present', function () {
+        const data = pm.response.json();
+        if (data.length > 0) {
+          pm.expect(data[0]).to.have.property('id');
+          pm.expect(data[0]).to.have.property('name');
+          pm.expect(data[0]).to.have.property('price');
+        }
+      });

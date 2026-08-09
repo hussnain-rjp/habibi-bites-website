@@ -1,0 +1,34 @@
+$kind: http-request
+method: GET
+url: '{{supabaseUrl}}/rest/v1/menu_items?select=*'
+order: 1000
+headers:
+  - key: 'apikey'
+    value: '{{supabaseAnonKey}}'
+  - key: 'Authorization'
+    value: 'Bearer {{supabaseAnonKey}}'
+  - key: 'Accept'
+    value: 'application/json'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Status is 200', function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test('Response is JSON array', function () {
+        pm.response.to.be.json;
+        const data = pm.response.json();
+        pm.expect(data).to.be.an('array');
+      });
+
+      pm.test('Menu items have expected shape when present', function () {
+        const data = pm.response.json();
+        if (data.length > 0) {
+          const item = data[0];
+          pm.expect(item).to.have.property('id');
+          pm.expect(item).to.have.property('name');
+          pm.expect(item).to.have.property('category');
+        }
+      });

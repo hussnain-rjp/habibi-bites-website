@@ -1,0 +1,41 @@
+$kind: http-request
+method: POST
+url: '{{supabaseUrl}}/auth/v1/token?grant_type=password'
+order: 7000
+headers:
+  - key: 'apikey'
+    value: '{{supabaseAnonKey}}'
+  - key: 'Content-Type'
+    value: 'application/json'
+  - key: 'Accept'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{adminEmail}}",
+      "password": "{{adminPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('Login returns expected status', function () {
+        pm.expect([200, 400, 401]).to.include(pm.response.code);
+      });
+
+      if (pm.response.code === 200) {
+        const data = pm.response.json();
+
+        pm.test('Successful login returns access token', function () {
+          pm.expect(data).to.have.property('access_token');
+          pm.expect(data.access_token).to.be.a('string').and.not.empty;
+        });
+
+        pm.collectionVariables.set('adminAccessToken', data.access_token);
+      } else {
+        pm.test('Failed login returns error payload', function () {
+          const data = pm.response.json();
+          pm.expect(data).to.be.an('object');
+        });
+      }
