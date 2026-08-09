@@ -1153,9 +1153,35 @@
         )
       ),
 
-      React.createElement('div', {
-        style: { position: 'fixed', top: '25%', left: '16px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 4.2s ease-in-out infinite' }
-      },
+      // 🇵🇰 4 Floating Pakistani Flags
+      React.createElement('div', { style: { position: 'fixed', top: '18%', left: '14px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 4.2s ease-in-out infinite' } },
+        React.createElement('svg', { width: '34', height: '22', viewBox: '0 0 36 24', fill: 'none', style: { borderRadius: '3px', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))' } },
+          React.createElement('rect', { width: '36', height: '24', fill: '#00401A' }),
+          React.createElement('rect', { width: '9', height: '24', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '23', cy: '12', r: '6', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '24.8', cy: '10.8', r: '5', fill: '#00401A' }),
+          React.createElement('polygon', { points: '24.5,8 25.2,9.6 27,9.6 25.6,10.6 26.1,12.2 24.5,11.2 22.9,12.2 23.4,10.6 22,9.6 23.8,9.6', fill: '#FFFFFF' })
+        )
+      ),
+      React.createElement('div', { style: { position: 'fixed', top: '22%', right: '14px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 4.8s ease-in-out infinite 0.8s' } },
+        React.createElement('svg', { width: '34', height: '22', viewBox: '0 0 36 24', fill: 'none', style: { borderRadius: '3px', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))' } },
+          React.createElement('rect', { width: '36', height: '24', fill: '#00401A' }),
+          React.createElement('rect', { width: '9', height: '24', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '23', cy: '12', r: '6', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '24.8', cy: '10.8', r: '5', fill: '#00401A' }),
+          React.createElement('polygon', { points: '24.5,8 25.2,9.6 27,9.6 25.6,10.6 26.1,12.2 24.5,11.2 22.9,12.2 23.4,10.6 22,9.6 23.8,9.6', fill: '#FFFFFF' })
+        )
+      ),
+      React.createElement('div', { style: { position: 'fixed', top: '60%', left: '14px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 4.5s ease-in-out infinite 1.4s' } },
+        React.createElement('svg', { width: '34', height: '22', viewBox: '0 0 36 24', fill: 'none', style: { borderRadius: '3px', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))' } },
+          React.createElement('rect', { width: '36', height: '24', fill: '#00401A' }),
+          React.createElement('rect', { width: '9', height: '24', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '23', cy: '12', r: '6', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '24.8', cy: '10.8', r: '5', fill: '#00401A' }),
+          React.createElement('polygon', { points: '24.5,8 25.2,9.6 27,9.6 25.6,10.6 26.1,12.2 24.5,11.2 22.9,12.2 23.4,10.6 22,9.6 23.8,9.6', fill: '#FFFFFF' })
+        )
+      ),
+      React.createElement('div', { style: { position: 'fixed', top: '65%', right: '14px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 5.0s ease-in-out infinite 0.4s' } },
         React.createElement('svg', { width: '34', height: '22', viewBox: '0 0 36 24', fill: 'none', style: { borderRadius: '3px', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))' } },
           React.createElement('rect', { width: '36', height: '24', fill: '#00401A' }),
           React.createElement('rect', { width: '9', height: '24', fill: '#FFFFFF' }),
@@ -1165,21 +1191,9 @@
         )
       ),
 
-      React.createElement('div', {
-        style: { position: 'fixed', top: '35%', right: '16px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 4.8s ease-in-out infinite 0.8s' }
-      },
-        React.createElement('svg', { width: '34', height: '22', viewBox: '0 0 36 24', fill: 'none', style: { borderRadius: '3px', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))' } },
-          React.createElement('rect', { width: '36', height: '24', fill: '#00401A' }),
-          React.createElement('rect', { width: '9', height: '24', fill: '#FFFFFF' }),
-          React.createElement('circle', { cx: '23', cy: '12', r: '6', fill: '#FFFFFF' }),
-          React.createElement('circle', { cx: '24.8', cy: '10.8', r: '5', fill: '#00401A' }),
-          React.createElement('polygon', { points: '24.5,8 25.2,9.6 27,9.6 25.6,10.6 26.1,12.2 24.5,11.2 22.9,12.2 23.4,10.6 22,9.6 23.8,9.6', fill: '#FFFFFF' })
-        )
-      ),
-
-      React.createElement('div', {
-        style: { position: 'fixed', bottom: '22px', left: '20px', zIndex: 9990, pointerEvents: 'none', animation: 'floatBalloon 5.2s ease-in-out infinite' }
-      },
+      // 🎈 4 Balloon Clusters
+      // Bottom Left Cluster
+      React.createElement('div', { style: { position: 'fixed', bottom: '22px', left: '20px', zIndex: 9990, pointerEvents: 'none', animation: 'floatBalloon 5.2s ease-in-out infinite' } },
         React.createElement('svg', { width: '55', height: '75', viewBox: '0 0 60 85', fill: 'none', style: { filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))' } },
           React.createElement('g', { transform: 'translate(0, 5)' },
             React.createElement('ellipse', { cx: '20', cy: '22', rx: '15', ry: '20', fill: 'url(#greenGrad2)' }),
@@ -1206,6 +1220,102 @@
               React.createElement('stop', { offset: '100%', stopColor: '#00220d' })
             ),
             React.createElement('radialGradient', { id: 'whiteGrad2', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#ffffff' }),
+              React.createElement('stop', { offset: '70%', stopColor: '#e2e8f0' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#cbd5e1' })
+            )
+          )
+        )
+      ),
+
+      // Bottom Right Cluster
+      React.createElement('div', { style: { position: 'fixed', bottom: '22px', right: '20px', zIndex: 9990, pointerEvents: 'none', animation: 'floatBalloon 4.8s ease-in-out infinite 1.2s' } },
+        React.createElement('svg', { width: '55', height: '75', viewBox: '0 0 60 85', fill: 'none', style: { filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))' } },
+          React.createElement('g', { transform: 'translate(0, 0)' },
+            React.createElement('ellipse', { cx: '22', cy: '22', rx: '15', ry: '20', fill: 'url(#whiteGrad2B)', stroke: '#e0e0e0', strokeWidth: '0.5' }),
+            React.createElement('ellipse', { cx: '17', cy: '14', rx: '4', ry: '7', fill: '#ffffff', opacity: '0.6', transform: 'rotate(-20 17 14)' }),
+            React.createElement('polygon', { points: '22,42 19,46 25,46', fill: '#e0e0e0' }),
+            React.createElement('path', { d: 'M22 46 Q16 60 28 80', stroke: '#cccccc', strokeWidth: '1.5', fill: 'none', opacity: '0.8' })
+          ),
+          React.createElement('g', { transform: 'translate(20, 5)' },
+            React.createElement('ellipse', { cx: '20', cy: '22', rx: '15', ry: '20', fill: 'url(#greenGrad2B)' }),
+            React.createElement('ellipse', { cx: '15', cy: '14', rx: '4', ry: '7', fill: '#ffffff', opacity: '0.35', transform: 'rotate(-20 15 14)' }),
+            React.createElement('polygon', { points: '20,42 17,46 23,46', fill: '#00401a' }),
+            React.createElement('path', { d: 'M20 46 Q25 60 28 80', stroke: '#00401a', strokeWidth: '1.5', fill: 'none', opacity: '0.6' })
+          ),
+          React.createElement('g', { transform: 'translate(10, -10)' },
+            React.createElement('ellipse', { cx: '20', cy: '20', rx: '14', ry: '18', fill: 'url(#greenGrad2B)' }),
+            React.createElement('ellipse', { cx: '15', cy: '13', rx: '3.5', ry: '6', fill: '#ffffff', opacity: '0.35', transform: 'rotate(-20 15 13)' }),
+            React.createElement('polygon', { points: '20,38 17,42 23,42', fill: '#00401a' }),
+            React.createElement('path', { d: 'M20 42 Q22 55 28 80', stroke: '#00401a', strokeWidth: '1.5', fill: 'none', opacity: '0.6' })
+          ),
+          React.createElement('defs', null,
+            React.createElement('radialGradient', { id: 'greenGrad2B', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#25d366' }),
+              React.createElement('stop', { offset: '60%', stopColor: '#00401a' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#00220d' })
+            ),
+            React.createElement('radialGradient', { id: 'whiteGrad2B', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#ffffff' }),
+              React.createElement('stop', { offset: '70%', stopColor: '#e2e8f0' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#cbd5e1' })
+            )
+          )
+        )
+      ),
+
+      // Upper Left Balloon Duo
+      React.createElement('div', { style: { position: 'fixed', top: '42%', left: '20px', zIndex: 9990, pointerEvents: 'none', animation: 'floatBalloon 5.6s ease-in-out infinite 0.6s' } },
+        React.createElement('svg', { width: '42', height: '60', viewBox: '0 0 50 70', fill: 'none', style: { filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.3))' } },
+          React.createElement('g', { transform: 'translate(0, 0)' },
+            React.createElement('ellipse', { cx: '18', cy: '18', rx: '12', ry: '16', fill: 'url(#greenGrad2C)' }),
+            React.createElement('ellipse', { cx: '14', cy: '11', rx: '3', ry: '5', fill: '#ffffff', opacity: '0.35', transform: 'rotate(-20 14 11)' }),
+            React.createElement('polygon', { points: '18,34 15,38 21,38', fill: '#00401a' }),
+            React.createElement('path', { d: 'M18 38 Q14 50 24 68', stroke: '#00401a', strokeWidth: '1.2', fill: 'none', opacity: '0.6' })
+          ),
+          React.createElement('g', { transform: 'translate(14, -8)' },
+            React.createElement('ellipse', { cx: '18', cy: '18', rx: '12', ry: '16', fill: 'url(#whiteGrad2C)', stroke: '#e0e0e0', strokeWidth: '0.5' }),
+            React.createElement('ellipse', { cx: '14', cy: '11', rx: '3', ry: '5', fill: '#ffffff', opacity: '0.6', transform: 'rotate(-20 14 11)' }),
+            React.createElement('polygon', { points: '18,34 15,38 21,38', fill: '#e0e0e0' }),
+            React.createElement('path', { d: 'M18 38 Q22 50 24 68', stroke: '#cccccc', strokeWidth: '1.2', fill: 'none', opacity: '0.8' })
+          ),
+          React.createElement('defs', null,
+            React.createElement('radialGradient', { id: 'greenGrad2C', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#25d366' }),
+              React.createElement('stop', { offset: '60%', stopColor: '#00401a' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#00220d' })
+            ),
+            React.createElement('radialGradient', { id: 'whiteGrad2C', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#ffffff' }),
+              React.createElement('stop', { offset: '70%', stopColor: '#e2e8f0' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#cbd5e1' })
+            )
+          )
+        )
+      ),
+
+      // Upper Right Balloon Duo
+      React.createElement('div', { style: { position: 'fixed', top: '45%', right: '20px', zIndex: 9990, pointerEvents: 'none', animation: 'floatBalloon 6.0s ease-in-out infinite 1.8s' } },
+        React.createElement('svg', { width: '42', height: '60', viewBox: '0 0 50 70', fill: 'none', style: { filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.3))' } },
+          React.createElement('g', { transform: 'translate(0, -8)' },
+            React.createElement('ellipse', { cx: '18', cy: '18', rx: '12', ry: '16', fill: 'url(#whiteGrad2D)', stroke: '#e0e0e0', strokeWidth: '0.5' }),
+            React.createElement('ellipse', { cx: '14', cy: '11', rx: '3', ry: '5', fill: '#ffffff', opacity: '0.6', transform: 'rotate(-20 14 11)' }),
+            React.createElement('polygon', { points: '18,34 15,38 21,38', fill: '#e0e0e0' }),
+            React.createElement('path', { d: 'M18 38 Q14 50 24 68', stroke: '#cccccc', strokeWidth: '1.2', fill: 'none', opacity: '0.8' })
+          ),
+          React.createElement('g', { transform: 'translate(14, 0)' },
+            React.createElement('ellipse', { cx: '18', cy: '18', rx: '12', ry: '16', fill: 'url(#greenGrad2D)' }),
+            React.createElement('ellipse', { cx: '14', cy: '11', rx: '3', ry: '5', fill: '#ffffff', opacity: '0.35', transform: 'rotate(-20 14 11)' }),
+            React.createElement('polygon', { points: '18,34 15,38 21,38', fill: '#00401a' }),
+            React.createElement('path', { d: 'M18 38 Q22 50 24 68', stroke: '#00401a', strokeWidth: '1.2', fill: 'none', opacity: '0.6' })
+          ),
+          React.createElement('defs', null,
+            React.createElement('radialGradient', { id: 'greenGrad2D', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#25d366' }),
+              React.createElement('stop', { offset: '60%', stopColor: '#00401a' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#00220d' })
+            ),
+            React.createElement('radialGradient', { id: 'whiteGrad2D', cx: '35%', cy: '35%', r: '65%' },
               React.createElement('stop', { offset: '0%', stopColor: '#ffffff' }),
               React.createElement('stop', { offset: '70%', stopColor: '#e2e8f0' }),
               React.createElement('stop', { offset: '100%', stopColor: '#cbd5e1' })
