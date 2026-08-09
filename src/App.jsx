@@ -18,6 +18,8 @@ import { ContactPage } from './presentation/pages/ContactPage.jsx';
 const TrackerPage = lazy(() => import('./presentation/pages/TrackerPage.jsx').then(m => ({ default: m.TrackerPage })));
 const AdminPage = lazy(() => import('./presentation/pages/AdminPage.jsx').then(m => ({ default: m.AdminPage })));
 
+import { IndependenceDecorations } from './presentation/components/IndependenceDecorations.jsx';
+
 export function App() {
   const [activePage, setActivePage] = useState('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -66,6 +68,7 @@ export function App() {
       <AuthProvider>
         <CartProvider>
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            <IndependenceDecorations />
             <Navbar activePage={activePage} setActivePage={setActivePage} />
             <div style={{ flex: 1 }}>
               <Suspense fallback={<div className="section-container" style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading view...</div>}>

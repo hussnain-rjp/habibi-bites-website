@@ -439,6 +439,42 @@ export class SupabaseRepository extends IRepository {
     const { error } = await this.client.from('settings').upsert(payload);
     if (error) throw new Error(error.message);
     return discountData;
+  }
+
+  async getSeasonalTheme() {
+    if (!this.client) return { enabled: true };
+    try {
+      const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
+      if (error || !data) return { enabled: true };
+      if (data.seasonal_theme_enabled !== undefined && data.seasonal_theme_enabled !== null) {
+        return { enabled: !!data.seasonal_theme_enabled };
+      }
+      return { enabled: true };
+    } catch (e) {
+      return { enabled: true };
+    }
+  }
+
+  async saveSeasonalTheme(enabled) {
+    const isEnabled = !!enabled;
+    if (this.client) {
+      checkRateLimit('admin_write', 'authenticatedAction');
+      recordAttempt('admin_write', 'authenticatedAction');
+      const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
+      const payload = {
+        id: 1,
+        delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
+        delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
+        max_active_orders: existing?.max_active_orders ?? 50,
+        seasonal_theme_enabled: isEnabled,
+        discount_data: existing?.discount_data || null
+      };
+      const { error } = await this.client.from('settings').upsert(payload);
+      if (error) console.warn("Supabase saveSeasonalTheme warning:", error.message);
+    }
+    return { enabled: isEnabled };
+  }
+
   async saveMenuItem(item) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');

@@ -829,6 +829,39 @@
       }
       return s;
     }
+    async getSeasonalTheme() {
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+          if (!error && data && data.seasonal_theme_enabled !== undefined && data.seasonal_theme_enabled !== null) {
+            return { enabled: !!data.seasonal_theme_enabled };
+          }
+        } catch (err) {}
+      }
+      const raw = readStore(DB_KEYS.SETTINGS) || {};
+      return { enabled: raw.seasonal_theme_enabled !== undefined ? !!raw.seasonal_theme_enabled : true };
+    }
+    async saveSeasonalTheme(enabled) {
+      const isEnabled = !!enabled;
+      const current = readStore(DB_KEYS.SETTINGS) || {};
+      writeStore(DB_KEYS.SETTINGS, { ...current, seasonal_theme_enabled: isEnabled });
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage_changed'));
+      if (supabaseClient) {
+        try {
+          const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+          const payload = {
+            id: 1,
+            delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
+            delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
+            max_active_orders: existing?.max_active_orders ?? 50,
+            seasonal_theme_enabled: isEnabled,
+            discount_data: existing?.discount_data || null
+          };
+          await supabaseClient.from('settings').upsert(payload);
+        } catch (err) {}
+      }
+      return { enabled: isEnabled };
+    }
     async getDiscountSettings() {
       const defaultDiscount = { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
       if (supabaseClient) {
@@ -1045,6 +1078,136 @@
 
   const repo = new FullBrowserRepository();
 
+  function IndependenceDecorationsOverlay() {
+    const [enabled, setEnabled] = useState(true);
+
+    useEffect(() => {
+      let isMounted = true;
+      const loadThemeState = async () => {
+        try {
+          if (repo && repo.getSeasonalTheme) {
+            const res = await repo.getSeasonalTheme();
+            if (isMounted) setEnabled(res.enabled);
+          } else {
+            const raw = localStorage.getItem('habibi_bites_delivery_settings');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed.seasonal_theme_enabled !== undefined && isMounted) {
+                setEnabled(!!parsed.seasonal_theme_enabled);
+              }
+            }
+          }
+        } catch (e) {}
+      };
+
+      loadThemeState();
+
+      const handleStorageChange = () => loadThemeState();
+      window.addEventListener('storage_changed', handleStorageChange);
+      window.addEventListener('storage', handleStorageChange);
+
+      return () => {
+        isMounted = false;
+        window.removeEventListener('storage_changed', handleStorageChange);
+        window.removeEventListener('storage', handleStorageChange);
+      };
+    }, []);
+
+    if (!enabled) return null;
+
+    return React.createElement('div', { className: 'independence-theme-wrapper', style: { pointerEvents: 'none', userSelect: 'none' } },
+      React.createElement('div', {
+        style: {
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '30px',
+          zIndex: 9999, pointerEvents: 'none', overflow: 'hidden', display: 'flex',
+          justify: 'space-around', alignItems: 'flex-start', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+        }
+      },
+        Array.from({ length: 18 }).map((_, idx) => 
+          React.createElement('div', {
+            key: idx,
+            style: { animation: `buntingSway ${3 + (idx % 3) * 0.5}s ease-in-out infinite ${(idx % 4) * 0.2}s`, transformOrigin: 'top center' }
+          },
+            idx % 2 === 0 ?
+              React.createElement('svg', { width: '22', height: '30', viewBox: '0 0 24 32', fill: 'none' },
+                React.createElement('polygon', { points: '0,0 24,0 12,32', fill: '#00401A' }),
+                React.createElement('circle', { cx: '12', cy: '11', r: '4.5', fill: '#FFFFFF' }),
+                React.createElement('circle', { cx: '13.2', cy: '10', r: '3.8', fill: '#00401A' }),
+                React.createElement('polygon', { points: '13,7.5 13.5,8.8 14.8,8.8 13.8,9.5 14.2,10.8 13,10 11.8,10.8 12.2,9.5 11.2,8.8 12.5,8.8', fill: '#FFFFFF' })
+              ) :
+              React.createElement('svg', { width: '22', height: '30', viewBox: '0 0 24 32', fill: 'none' },
+                React.createElement('polygon', { points: '0,0 24,0 12,32', fill: '#FFFFFF' }),
+                React.createElement('circle', { cx: '12', cy: '11', r: '4.5', fill: '#00401A' }),
+                React.createElement('circle', { cx: '13.2', cy: '10', r: '3.8', fill: '#FFFFFF' }),
+                React.createElement('polygon', { points: '13,7.5 13.5,8.8 14.8,8.8 13.8,9.5 14.2,10.8 13,10 11.8,10.8 12.2,9.5 11.2,8.8 12.5,8.8', fill: '#00401A' })
+              )
+          )
+        )
+      ),
+
+      React.createElement('div', {
+        style: { position: 'fixed', top: '25%', left: '16px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 4.2s ease-in-out infinite' }
+      },
+        React.createElement('svg', { width: '34', height: '22', viewBox: '0 0 36 24', fill: 'none', style: { borderRadius: '3px', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))' } },
+          React.createElement('rect', { width: '36', height: '24', fill: '#00401A' }),
+          React.createElement('rect', { width: '9', height: '24', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '23', cy: '12', r: '6', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '24.8', cy: '10.8', r: '5', fill: '#00401A' }),
+          React.createElement('polygon', { points: '24.5,8 25.2,9.6 27,9.6 25.6,10.6 26.1,12.2 24.5,11.2 22.9,12.2 23.4,10.6 22,9.6 23.8,9.6', fill: '#FFFFFF' })
+        )
+      ),
+
+      React.createElement('div', {
+        style: { position: 'fixed', top: '35%', right: '16px', zIndex: 9990, pointerEvents: 'none', animation: 'floatWaving 4.8s ease-in-out infinite 0.8s' }
+      },
+        React.createElement('svg', { width: '34', height: '22', viewBox: '0 0 36 24', fill: 'none', style: { borderRadius: '3px', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))' } },
+          React.createElement('rect', { width: '36', height: '24', fill: '#00401A' }),
+          React.createElement('rect', { width: '9', height: '24', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '23', cy: '12', r: '6', fill: '#FFFFFF' }),
+          React.createElement('circle', { cx: '24.8', cy: '10.8', r: '5', fill: '#00401A' }),
+          React.createElement('polygon', { points: '24.5,8 25.2,9.6 27,9.6 25.6,10.6 26.1,12.2 24.5,11.2 22.9,12.2 23.4,10.6 22,9.6 23.8,9.6', fill: '#FFFFFF' })
+        )
+      ),
+
+      React.createElement('div', {
+        style: { position: 'fixed', bottom: '22px', left: '20px', zIndex: 9990, pointerEvents: 'none', animation: 'floatBalloon 5.2s ease-in-out infinite' }
+      },
+        React.createElement('svg', { width: '55', height: '75', viewBox: '0 0 60 85', fill: 'none', style: { filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))' } },
+          React.createElement('g', { transform: 'translate(0, 5)' },
+            React.createElement('ellipse', { cx: '20', cy: '22', rx: '15', ry: '20', fill: 'url(#greenGrad2)' }),
+            React.createElement('ellipse', { cx: '15', cy: '14', rx: '4', ry: '7', fill: '#ffffff', opacity: '0.35', transform: 'rotate(-20 15 14)' }),
+            React.createElement('polygon', { points: '20,42 17,46 23,46', fill: '#00401a' }),
+            React.createElement('path', { d: 'M20 46 Q15 60 28 80', stroke: '#00401a', strokeWidth: '1.5', fill: 'none', opacity: '0.6' })
+          ),
+          React.createElement('g', { transform: 'translate(20, 0)' },
+            React.createElement('ellipse', { cx: '22', cy: '22', rx: '15', ry: '20', fill: 'url(#whiteGrad2)', stroke: '#e0e0e0', strokeWidth: '0.5' }),
+            React.createElement('ellipse', { cx: '17', cy: '14', rx: '4', ry: '7', fill: '#ffffff', opacity: '0.6', transform: 'rotate(-20 17 14)' }),
+            React.createElement('polygon', { points: '22,42 19,46 25,46', fill: '#e0e0e0' }),
+            React.createElement('path', { d: 'M22 46 Q28 60 28 80', stroke: '#cccccc', strokeWidth: '1.5', fill: 'none', opacity: '0.8' })
+          ),
+          React.createElement('g', { transform: 'translate(10, -10)' },
+            React.createElement('ellipse', { cx: '20', cy: '20', rx: '14', ry: '18', fill: 'url(#greenGrad2)' }),
+            React.createElement('ellipse', { cx: '15', cy: '13', rx: '3.5', ry: '6', fill: '#ffffff', opacity: '0.35', transform: 'rotate(-20 15 13)' }),
+            React.createElement('polygon', { points: '20,38 17,42 23,42', fill: '#00401a' }),
+            React.createElement('path', { d: 'M20 42 Q22 55 28 80', stroke: '#00401a', strokeWidth: '1.5', fill: 'none', opacity: '0.6' })
+          ),
+          React.createElement('defs', null,
+            React.createElement('radialGradient', { id: 'greenGrad2', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#25d366' }),
+              React.createElement('stop', { offset: '60%', stopColor: '#00401a' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#00220d' })
+            ),
+            React.createElement('radialGradient', { id: 'whiteGrad2', cx: '35%', cy: '35%', r: '65%' },
+              React.createElement('stop', { offset: '0%', stopColor: '#ffffff' }),
+              React.createElement('stop', { offset: '70%', stopColor: '#e2e8f0' }),
+              React.createElement('stop', { offset: '100%', stopColor: '#cbd5e1' })
+            )
+          )
+        )
+      )
+    );
+  }
+
   // --- MAIN APP COMPONENT ---
   function HabibiBitesFullApp() {
     const [activePage, setActivePage] = useState('home');
@@ -1100,6 +1263,8 @@
     const cartSubtotal = cart.reduce((a, i) => a + (i.price * i.quantity), 0);
 
     return React.createElement('div', { style: { minHeight: '100vh', display: 'flex', flexDirection: 'column' } },
+      React.createElement(IndependenceDecorationsOverlay),
+
       
       // Global Navigation Header
       React.createElement('header', { id: 'global-header' },

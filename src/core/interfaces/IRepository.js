@@ -37,6 +37,8 @@ export class IRepository {
   async saveDeliverySettings(enabled, fee, maxOrders) { throw new Error("Method saveDeliverySettings() not implemented."); }
   async getDiscountSettings() { throw new Error("Method getDiscountSettings() not implemented."); }
   async saveDiscountSettings(discountData) { throw new Error("Method saveDiscountSettings() not implemented."); }
+  async getSeasonalTheme() { throw new Error("Method getSeasonalTheme() not implemented."); }
+  async saveSeasonalTheme(enabled) { throw new Error("Method saveSeasonalTheme() not implemented."); }
 
   // Auth
   async loginAdmin(username, password) { throw new Error("Method loginAdmin() not implemented."); }

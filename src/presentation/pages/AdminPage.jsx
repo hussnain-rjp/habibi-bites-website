@@ -18,6 +18,7 @@ export const AdminPage = () => {
 
   const [orders, setOrders] = useState([]);
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [seasonalThemeState, setSeasonalThemeState] = useState(true);
   const [pendingReviews, setPendingReviews] = useState([]);
 
   const [deliverySettings, setDeliverySettings] = useState({ enabled: false, fee: 150, maxOrders: 50 });
@@ -62,14 +63,15 @@ export const AdminPage = () => {
   // High-performance parallelized data loader
   const loadDashboardData = async (isInitial = false) => {
     try {
-      const [fetchedOrders, fetchedReviews, items, fetchedDeals, s, disc, info] = await Promise.all([
+      const [fetchedOrders, fetchedReviews, items, fetchedDeals, s, disc, info, theme] = await Promise.all([
         db.getOrders(),
         db.getPendingReviews(),
         db.getMenuItems(),
         db.getDeals(),
         isInitial ? db.getDeliverySettings() : Promise.resolve(null),
         isInitial ? db.getDiscountSettings() : Promise.resolve(null),
-        isInitial ? db.getRestaurantInfo() : Promise.resolve(null)
+        isInitial ? db.getRestaurantInfo() : Promise.resolve(null),
+        isInitial && db.getSeasonalTheme ? db.getSeasonalTheme() : Promise.resolve(null)
       ]);
 
       setOrders(fetchedOrders || []);
@@ -86,6 +88,7 @@ export const AdminPage = () => {
         }
         if (disc) setDiscountState(disc);
         if (info) setRestInfoState(info);
+        if (theme) setSeasonalThemeState(theme.enabled);
       }
     } catch (e) {
       console.error("Dashboard loading error:", e);
@@ -679,6 +682,52 @@ export const AdminPage = () => {
       {/* Secondary Management Cards (Delivery Settings, Discount Manager, & Reviews Moderation) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
         
+        {/* Seasonal Theme Settings Card */}
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)' }}>
+          <h3 style={{ margin: '0 0 12px 0', color: 'var(--accent)', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🇵🇰 Seasonal Independence Day Theme</span>
+          </h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: '1.4' }}>
+            Show Independence Day Decorations (Floating Pakistani flags, top bunting streamers jhandiyan, and green/white balloons) across the site.
+          </p>
+          <div 
+            onClick={async () => {
+              const next = !seasonalThemeState;
+              setSeasonalThemeState(next);
+              if (db.saveSeasonalTheme) {
+                await db.saveSeasonalTheme(next);
+              } else {
+                const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
+                const parsed = JSON.parse(raw);
+                parsed.seasonal_theme_enabled = next;
+                localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
+                window.dispatchEvent(new Event('storage_changed'));
+              }
+            }}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              padding: '14px 18px', 
+              background: seasonalThemeState ? 'rgba(37, 211, 102, 0.15)' : 'var(--bg-elevated)', 
+              borderRadius: '10px', 
+              cursor: 'pointer', 
+              border: `2px solid ${seasonalThemeState ? '#25d366' : 'var(--border)'}`,
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.3rem' }}>{seasonalThemeState ? '🇵🇰' : '⚪'}</span>
+              <span style={{ fontWeight: 800, fontSize: '0.95rem', color: seasonalThemeState ? '#25d366' : '#fff' }}>
+                {seasonalThemeState ? 'Independence Theme: ON' : 'Independence Theme: OFF'}
+              </span>
+            </div>
+            <div style={{ width: '48px', height: '26px', borderRadius: '20px', background: seasonalThemeState ? '#25d366' : '#4b5563', position: 'relative', transition: 'all 0.2s ease' }}>
+              <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: seasonalThemeState ? '25px' : '3px', transition: 'all 0.2s ease' }} />
+            </div>
+          </div>
+        </div>
+
         {/* Delivery Settings Card */}
         <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)' }}>
           <h3 style={{ margin: '0 0 16px 0', color: 'var(--accent)', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>

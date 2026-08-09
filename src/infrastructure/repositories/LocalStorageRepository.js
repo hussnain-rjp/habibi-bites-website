@@ -252,6 +252,19 @@ export class LocalStorageRepository extends IRepository {
     return discountData;
   }
 
+  async getSeasonalTheme() {
+    const raw = readStore(DB_KEYS.SETTINGS) || {};
+    return { enabled: raw.seasonal_theme_enabled !== undefined ? !!raw.seasonal_theme_enabled : true };
+  }
+
+  async saveSeasonalTheme(enabled) {
+    const current = readStore(DB_KEYS.SETTINGS) || {};
+    const data = { ...current, seasonal_theme_enabled: !!enabled };
+    writeStore(DB_KEYS.SETTINGS, data);
+    return { enabled: !!enabled };
+  }
+
+
   // Auth
   async loginAdmin(username, password) {
     if (isSupabaseConfigured()) {

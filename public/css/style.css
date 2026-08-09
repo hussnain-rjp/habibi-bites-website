@@ -2741,4 +2741,21 @@ img {
   100% { background-position: 200% 0; }
 }
 
+/* 🇵🇰 Independence Day Festive Theme Keyframes */
+@keyframes buntingSway {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(2.5deg); }
+}
+
+@keyframes floatWaving {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(3deg); }
+}
+
+@keyframes floatBalloon {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(-3deg); }
+}
+
+
 
