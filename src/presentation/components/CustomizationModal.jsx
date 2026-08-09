@@ -79,11 +79,11 @@ export const CustomizationModal = ({ item, onClose }) => {
 
         <div className="modal-body" style={{ padding: '20px', maxHeight: '65vh', overflowY: 'auto' }}>
           
-          {/* Size Selector */}
+          {/* Size / Variant Selector */}
           {availableSizes.length > 1 && (
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' }}>Select Size:</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px' }}>
+              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' }}>Select Option / Size:</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px' }}>
                 {availableSizes.map(size => (
                   <button
                     key={size}
@@ -97,8 +97,7 @@ export const CustomizationModal = ({ item, onClose }) => {
                       color: 'var(--text-main)',
                       fontWeight: selectedSize === size ? 'bold' : 'normal',
                       cursor: 'pointer',
-                      textTransform: 'uppercase',
-                      fontSize: '0.85rem'
+                      fontSize: '0.88rem'
                     }}
                   >
                     {size}<br/>
@@ -108,6 +107,7 @@ export const CustomizationModal = ({ item, onClose }) => {
               </div>
             </div>
           )}
+
 
           {/* Addons Selector */}
           <div>

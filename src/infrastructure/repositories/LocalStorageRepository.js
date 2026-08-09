@@ -59,11 +59,13 @@ export class LocalStorageRepository extends IRepository {
 
   // Menu Items
   async getMenuItems() {
-    return readStore(DB_KEYS.MENU_ITEMS) || (window.HABIBI_MENU ? window.HABIBI_MENU.items : []);
+    const stored = readStore(DB_KEYS.MENU_ITEMS);
+    if (stored !== null && stored !== undefined) return stored;
+    return window.HABIBI_MENU ? window.HABIBI_MENU.items : [];
   }
   async getMenuItemById(id) {
     const items = await this.getMenuItems();
-    return items.find(i => i.id === id) || null;
+    return items.find(i => String(i.id) === String(id)) || null;
   }
   async addMenuItem(item) {
     const items = await this.getMenuItems();
@@ -73,7 +75,7 @@ export class LocalStorageRepository extends IRepository {
   }
   async updateMenuItem(item) {
     const items = await this.getMenuItems();
-    const idx = items.findIndex(i => i.id === item.id);
+    const idx = items.findIndex(i => String(i.id) === String(item.id));
     if (idx !== -1) {
       items[idx] = item;
       writeStore(DB_KEYS.MENU_ITEMS, items);
@@ -81,14 +83,24 @@ export class LocalStorageRepository extends IRepository {
     return true;
   }
   async deleteMenuItem(id) {
-    const items = (await this.getMenuItems()).filter(i => i.id !== id);
+    const items = (await this.getMenuItems()).filter(i => String(i.id) !== String(id));
     writeStore(DB_KEYS.MENU_ITEMS, items);
+
+    // Cascade delete related invoice history entries referencing this item
+    const orders = await this.getOrders();
+    const updatedOrders = orders.filter(o => {
+      if (!Array.isArray(o.items)) return true;
+      return !o.items.some(item => String(item.id) === String(id));
+    });
+    writeStore(DB_KEYS.ORDERS, updatedOrders);
     return true;
   }
 
   // Deals
   async getDeals() {
-    return readStore(DB_KEYS.DEALS) || (window.HABIBI_DEALS ? window.HABIBI_DEALS : []);
+    const stored = readStore(DB_KEYS.DEALS);
+    if (stored !== null && stored !== undefined) return stored;
+    return window.HABIBI_DEALS ? window.HABIBI_DEALS : [];
   }
   async addDeal(deal) {
     const deals = await this.getDeals();
@@ -108,6 +120,14 @@ export class LocalStorageRepository extends IRepository {
   async deleteDeal(id) {
     const deals = (await this.getDeals()).filter(d => String(d.id) !== String(id));
     writeStore(DB_KEYS.DEALS, deals);
+
+    // Cascade delete related invoice history entries referencing this deal
+    const orders = await this.getOrders();
+    const updatedOrders = orders.filter(o => {
+      if (!Array.isArray(o.items)) return true;
+      return !o.items.some(item => String(item.id) === String(id));
+    });
+    writeStore(DB_KEYS.ORDERS, updatedOrders);
     return true;
   }
 
@@ -117,7 +137,7 @@ export class LocalStorageRepository extends IRepository {
   }
   async getOrderById(id) {
     const orders = await this.getOrders();
-    return orders.find(o => o.id.toUpperCase() === id.toUpperCase().trim()) || null;
+    return orders.find(o => String(o.id).toUpperCase() === String(id).toUpperCase().trim()) || null;
   }
   async getOrdersByPhone(phone) {
     const clean = phone.replace(/[^0-9]/g, "");
@@ -153,12 +173,17 @@ export class LocalStorageRepository extends IRepository {
   }
   async updateOrderStatus(orderId, newStatus) {
     const orders = await this.getOrders();
-    const idx = orders.findIndex(o => o.id.toUpperCase() === orderId.toUpperCase().trim());
+    const idx = orders.findIndex(o => String(o.id).toUpperCase() === String(orderId).toUpperCase().trim());
     if (idx === -1) return null;
 
     orders[idx] = OrderFactory.addStatusUpdate(orders[idx], newStatus);
     writeStore(DB_KEYS.ORDERS, orders);
     return orders[idx];
+  }
+  async deleteOrder(id) {
+    const orders = (await this.getOrders()).filter(o => String(o.id).toUpperCase() !== String(id).toUpperCase().trim());
+    writeStore(DB_KEYS.ORDERS, orders);
+    return true;
   }
 
   // Reviews

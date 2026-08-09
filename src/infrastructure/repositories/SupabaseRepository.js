@@ -25,10 +25,31 @@ export class SupabaseRepository extends IRepository {
       checkRateLimit('menu', 'publicRead');
       recordAttempt('menu', 'publicRead');
       const { data, error } = await this.client.from('menu_items').select('*');
-      if (error || !data || data.length === 0) {
-        if (error) console.error("Supabase getMenuItems Error:", error.message);
+      if (error) {
+        console.error("Supabase getMenuItems Error:", error.message);
         return fallback;
       }
+      // If table is completely empty on first initialization, auto-seed default items once
+      if ((!data || data.length === 0) && !this._menuSeeded && fallback.length > 0) {
+        this._menuSeeded = true;
+        try {
+          const formattedDefaults = fallback.map(item => ({
+            id: String(item.id),
+            name: item.name,
+            category: item.category,
+            description: item.description || '',
+            prices: typeof item.prices === 'object' ? item.prices : { single: item.price || 0 },
+            image: item.image || ''
+          }));
+          await this.client.from('menu_items').upsert(formattedDefaults);
+          const seeded = await this.client.from('menu_items').select('*');
+          if (seeded.data && seeded.data.length > 0) return seeded.data;
+        } catch (e) {
+          console.warn("Auto-seed menu_items error:", e.message);
+        }
+      }
+      this._menuSeeded = true;
+      if (!data) return [];
       return data.map(item => {
         let imagePath = item.image || '';
         let parsedPrices = item.prices;
@@ -46,7 +67,7 @@ export class SupabaseRepository extends IRepository {
     if (!this.client) return null;
     checkRateLimit('menu', 'publicRead');
     recordAttempt('menu', 'publicRead');
-    const { data, error } = await this.client.from('menu_items').select('*').eq('id', id).single();
+    const { data, error } = await this.client.from('menu_items').select('*').eq('id', String(id)).maybeSingle();
     if (error) return null;
     return data;
   }
@@ -54,7 +75,15 @@ export class SupabaseRepository extends IRepository {
   async addMenuItem(item) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
-    const { data, error } = await this.client.from('menu_items').insert([item]).select().single();
+    const payload = {
+      id: String(item.id),
+      name: item.name,
+      category: item.category,
+      description: item.description || '',
+      prices: item.prices,
+      image: item.image || ''
+    };
+    const { data, error } = await this.client.from('menu_items').insert([payload]).select().single();
     if (error) throw new Error(error.message);
     return data;
   }
@@ -62,7 +91,15 @@ export class SupabaseRepository extends IRepository {
   async updateMenuItem(item) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
-    const { error } = await this.client.from('menu_items').update(item).eq('id', item.id);
+    const payload = {
+      id: String(item.id),
+      name: item.name,
+      category: item.category,
+      description: item.description || '',
+      prices: item.prices,
+      image: item.image || ''
+    };
+    const { error } = await this.client.from('menu_items').update(payload).eq('id', String(item.id));
     if (error) throw new Error(error.message);
     return true;
   }
@@ -70,8 +107,24 @@ export class SupabaseRepository extends IRepository {
   async deleteMenuItem(id) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
-    const { error } = await this.client.from('menu_items').delete().eq('id', id);
+    const targetId = String(id);
+    const { error } = await this.client.from('menu_items').delete().eq('id', targetId);
     if (error) throw new Error(error.message);
+
+    // Cascade delete related invoice history entries referencing this menu item
+    try {
+      const { data: allOrders } = await this.client.from('orders').select('id, items');
+      if (allOrders && allOrders.length > 0) {
+        const orderIdsToDelete = allOrders
+          .filter(o => Array.isArray(o.items) && o.items.some(it => String(it.id) === targetId))
+          .map(o => o.id);
+        if (orderIdsToDelete.length > 0) {
+          await this.client.from('orders').delete().in('id', orderIdsToDelete);
+        }
+      }
+    } catch (e) {
+      console.warn("Invoice history cascade cleanup error:", e.message);
+    }
     return true;
   }
 
@@ -90,7 +143,7 @@ export class SupabaseRepository extends IRepository {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
     const payload = {
-      id: deal.id,
+      id: String(deal.id),
       name: deal.name,
       tag: deal.tag || 'Special',
       contents: deal.contents || '',
@@ -115,10 +168,27 @@ export class SupabaseRepository extends IRepository {
   async deleteDeal(id) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
-    const { error } = await this.client.from('deals').delete().eq('id', id);
+    const targetId = String(id);
+    const { error } = await this.client.from('deals').delete().eq('id', targetId);
     if (error) throw new Error(error.message);
+
+    // Cascade delete related invoice history entries referencing this deal
+    try {
+      const { data: allOrders } = await this.client.from('orders').select('id, items');
+      if (allOrders && allOrders.length > 0) {
+        const orderIdsToDelete = allOrders
+          .filter(o => Array.isArray(o.items) && o.items.some(it => String(it.id) === targetId))
+          .map(o => o.id);
+        if (orderIdsToDelete.length > 0) {
+          await this.client.from('orders').delete().in('id', orderIdsToDelete);
+        }
+      }
+    } catch (e) {
+      console.warn("Invoice history cascade cleanup error:", e.message);
+    }
     return true;
   }
+
 
   // ── Orders ────────────────────────────────────────────────────────────────
 
@@ -278,6 +348,18 @@ export class SupabaseRepository extends IRepository {
     const { error } = await this.client.from('reviews').delete().eq('id', id);
     if (error) throw new Error(error.message);
     return true;
+  }
+
+  async deleteOrder(id) {
+    checkRateLimit('admin_write', 'authenticatedAction');
+    recordAttempt('admin_write', 'authenticatedAction');
+    if (this.client) {
+      const { error } = await this.client.from('orders').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+    }
+    return true;
+  }
+
   async clearAllOrders() {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');

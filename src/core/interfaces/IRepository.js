@@ -23,6 +23,7 @@ export class IRepository {
   async getOrdersByPhone(phone) { throw new Error("Method getOrdersByPhone() not implemented."); }
   async createOrder(customerDetails, items, total, deliveryFee) { throw new Error("Method createOrder() not implemented."); }
   async updateOrderStatus(orderId, newStatus) { throw new Error("Method updateOrderStatus() not implemented."); }
+  async deleteOrder(id) { throw new Error("Method deleteOrder() not implemented."); }
 
   // Reviews
   async getReviews() { throw new Error("Method getReviews() not implemented."); }

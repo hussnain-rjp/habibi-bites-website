@@ -23,8 +23,13 @@ export const AdminPage = () => {
   const [settingsMaxInput, setSettingsMaxInput] = useState(50);
   const [settingsEnabledInput, setSettingsEnabledInput] = useState(false);
   const [menuItemsList, setMenuItemsList] = useState([]);
+  const [dealsList, setDealsList] = useState([]);
+  const [dealSearchFilter, setDealSearchFilter] = useState('');
+  const [editingDeal, setEditingDeal] = useState(null);
+  const [dealMsg, setDealMsg] = useState({ type: '', text: '' });
   const [menuSearchFilter, setMenuSearchFilter] = useState('');
   const [editingMenuItem, setEditingMenuItem] = useState(null);
+  const [variantRows, setVariantRows] = useState([{ name: 'single', price: 500 }]);
   const [menuMsg, setMenuMsg] = useState({ type: '', text: '' });
   const [discountState, setDiscountState] = useState({
     enabled: false,
@@ -55,10 +60,11 @@ export const AdminPage = () => {
   // High-performance parallelized data loader
   const loadDashboardData = async (isInitial = false) => {
     try {
-      const [fetchedOrders, fetchedReviews, items, s, disc, info] = await Promise.all([
+      const [fetchedOrders, fetchedReviews, items, fetchedDeals, s, disc, info] = await Promise.all([
         db.getOrders(),
         db.getPendingReviews(),
         db.getMenuItems(),
+        db.getDeals(),
         isInitial ? db.getDeliverySettings() : Promise.resolve(null),
         isInitial ? db.getDiscountSettings() : Promise.resolve(null),
         isInitial ? db.getRestaurantInfo() : Promise.resolve(null)
@@ -67,6 +73,7 @@ export const AdminPage = () => {
       setOrders(fetchedOrders || []);
       setPendingReviews(fetchedReviews || []);
       setMenuItemsList(items || []);
+      setDealsList(fetchedDeals || []);
 
       if (isInitial) {
         if (s) {
@@ -131,6 +138,16 @@ export const AdminPage = () => {
     loadDashboardData();
   };
 
+  const handleDeleteOrder = async (orderId) => {
+    if (!window.confirm(`Are you sure you want to delete order #${orderId}? This solo deletion cannot be undone.`)) return;
+    try {
+      await db.deleteOrder(orderId);
+      loadDashboardData();
+    } catch (err) {
+      alert(`Failed to delete order: ${err.message}`);
+    }
+  };
+
   const handleApproveReview = async (reviewId) => {
     await db.approveReview(reviewId);
     loadDashboardData();
@@ -141,18 +158,41 @@ export const AdminPage = () => {
     loadDashboardData();
   };
 
+  const openEditMenuItem = (item) => {
+    setEditingMenuItem(item);
+    if (item && item.prices && typeof item.prices === 'object' && Object.keys(item.prices).length > 0) {
+      setVariantRows(Object.entries(item.prices).map(([k, v]) => ({ name: k, price: v })));
+    } else if (item && (item.price || item.prices)) {
+      setVariantRows([{ name: 'single', price: item.price || item.prices || 0 }]);
+    } else {
+      setVariantRows([{ name: 'single', price: 500 }]);
+    }
+  };
+
   const handleSaveMenuItem = async (e) => {
     e.preventDefault();
     if (!editingMenuItem || !editingMenuItem.name) return;
+
+    const pricesObj = {};
+    variantRows.forEach(v => {
+      const name = v.name.trim() || 'single';
+      pricesObj[name] = parseFloat(v.price) || 0;
+    });
+
+    const itemToSave = {
+      ...editingMenuItem,
+      prices: Object.keys(pricesObj).length > 0 ? pricesObj : { single: 0 }
+    };
+
     try {
       if (db.saveMenuItem) {
-        await db.saveMenuItem(editingMenuItem);
-      } else if (editingMenuItem.id) {
-        await db.updateMenuItem(editingMenuItem);
+        await db.saveMenuItem(itemToSave);
+      } else if (itemToSave.id) {
+        await db.updateMenuItem(itemToSave);
       } else {
-        await db.addMenuItem(editingMenuItem);
+        await db.addMenuItem(itemToSave);
       }
-      setMenuMsg({ type: 'success', text: `✅ Menu item "${editingMenuItem.name}" saved successfully!` });
+      setMenuMsg({ type: 'success', text: `✅ Menu item "${itemToSave.name}" saved successfully!` });
       setTimeout(() => setMenuMsg({ type: '', text: '' }), 4000);
       setEditingMenuItem(null);
       loadDashboardData();
@@ -162,16 +202,49 @@ export const AdminPage = () => {
   };
 
   const handleDeleteMenuItem = async (itemId) => {
-    if (!window.confirm("Are you sure you want to delete this menu item?")) return;
+    if (!window.confirm("Are you sure you want to delete this menu item? Any related invoice history entries referencing this item will also be deleted.")) return;
     try {
       await db.deleteMenuItem(itemId);
-      setMenuMsg({ type: 'success', text: '✅ Menu item deleted successfully!' });
+      setMenuMsg({ type: 'success', text: '✅ Menu item and related invoice entries deleted successfully!' });
       setTimeout(() => setMenuMsg({ type: '', text: '' }), 4000);
       loadDashboardData();
     } catch (err) {
       setMenuMsg({ type: 'error', text: `⚠️ ${err.message || 'Failed to delete menu item.'}` });
     }
   };
+
+  const handleSaveDeal = async (e) => {
+    e.preventDefault();
+    if (!editingDeal || !editingDeal.name) return;
+    try {
+      if (db.saveDeal) {
+        await db.saveDeal(editingDeal);
+      } else if (editingDeal.id) {
+        await db.updateDeal(editingDeal);
+      } else {
+        await db.addDeal(editingDeal);
+      }
+      setDealMsg({ type: 'success', text: `✅ Deal "${editingDeal.name}" saved successfully!` });
+      setTimeout(() => setDealMsg({ type: '', text: '' }), 4000);
+      setEditingDeal(null);
+      loadDashboardData();
+    } catch (err) {
+      setDealMsg({ type: 'error', text: `⚠️ ${err.message || 'Failed to save deal.'}` });
+    }
+  };
+
+  const handleDeleteDeal = async (dealId) => {
+    if (!window.confirm("Are you sure you want to delete this deal? Any related invoice history entries referencing this deal will also be deleted.")) return;
+    try {
+      await db.deleteDeal(dealId);
+      setDealMsg({ type: 'success', text: '✅ Deal and related invoice entries deleted successfully!' });
+      setTimeout(() => setDealMsg({ type: '', text: '' }), 4000);
+      loadDashboardData();
+    } catch (err) {
+      setDealMsg({ type: 'error', text: `⚠️ ${err.message || 'Failed to delete deal.'}` });
+    }
+  };
+
 
   const handleSaveSettings = async (e) => {
     e.preventDefault();
@@ -417,26 +490,47 @@ export const AdminPage = () => {
                         </select>
                       </td>
 
-                      <td style={{ padding: '16px 10px', verticalAlign: 'top' }}>
+                      <td style={{ padding: '16px 10px', verticalAlign: 'top', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <button 
                           onClick={() => handlePrintInvoice(order)}
                           style={{ 
-                            padding: '10px 16px', 
+                            padding: '8px 12px', 
                             background: 'var(--bg-panel)', 
                             border: '1px solid var(--accent)', 
                             borderRadius: '8px', 
                             color: 'var(--accent)', 
                             fontWeight: 800, 
-                            fontSize: '0.85rem', 
+                            fontSize: '0.82rem', 
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
+                            justifyContent: 'center',
                             gap: '6px'
                           }}
                         >
                           🖨️ Print Receipt
                         </button>
+                        <button 
+                          onClick={() => handleDeleteOrder(order.id)}
+                          style={{ 
+                            padding: '8px 12px', 
+                            background: 'rgba(220, 38, 38, 0.15)', 
+                            border: '1px solid #dc2626', 
+                            borderRadius: '8px', 
+                            color: '#fca5a5', 
+                            fontWeight: 800, 
+                            fontSize: '0.82rem', 
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          🗑️ Delete Invoice
+                        </button>
                       </td>
+
                     </tr>
                   );
                 })}
@@ -662,7 +756,7 @@ export const AdminPage = () => {
         <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)', gridColumn: '1 / -1' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>🍕 Menu Items & Instant Price Control ({menuItemsList.length} items)</span>
+              <span>🍕 Menu Items & Flexible Variant Pricing ({menuItemsList.length} items)</span>
             </h3>
             <div style={{ display: 'flex', gap: '10px' }}>
               <input 
@@ -673,7 +767,7 @@ export const AdminPage = () => {
                 style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.88rem', minWidth: '220px' }}
               />
               <button 
-                onClick={() => setEditingMenuItem({ id: `item_${Date.now()}`, name: '', category: 'burgers', description: '', prices: { single: 500 }, image: '' })}
+                onClick={() => openEditMenuItem({ id: `item_${Date.now()}`, name: '', category: 'burgers', description: '', prices: { single: 500 }, image: '' })}
                 className="btn btn-primary"
                 style={{ padding: '8px 16px', fontSize: '0.85rem', fontWeight: 800 }}
               >
@@ -700,16 +794,57 @@ export const AdminPage = () => {
                   <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Category</label>
                   <input type="text" required value={editingMenuItem.category || ''} onChange={e => setEditingMenuItem({ ...editingMenuItem, category: e.target.value })} style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Default / Single Price (Rs.)</label>
-                  <input 
-                    type="number" 
-                    value={typeof editingMenuItem.prices === 'object' ? (editingMenuItem.prices?.single || editingMenuItem.prices?.regular || Object.values(editingMenuItem.prices)[0] || 0) : editingMenuItem.prices || 0} 
-                    onChange={e => setEditingMenuItem({ ...editingMenuItem, prices: { ...editingMenuItem.prices, single: Number(e.target.value) } })} 
-                    style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} 
-                  />
-                </div>
               </div>
+
+              {/* Flexible Custom Variant Pricing Section */}
+              <div style={{ marginBottom: '16px', background: 'var(--bg-panel)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--accent)' }}>💰 Custom Size / Pricing Variants</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setVariantRows([...variantRows, { name: '', price: 0 }])}
+                    style={{ padding: '4px 10px', background: 'var(--accent)', border: 'none', borderRadius: '6px', color: '#000', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}
+                  >
+                    + Add Variant Option
+                  </button>
+                </div>
+                {variantRows.map((vr, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'center' }}>
+                    <input 
+                      type="text" 
+                      placeholder="Variant Name (e.g. Small, Medium, 6 Pcs)" 
+                      value={vr.name} 
+                      onChange={e => {
+                        const copy = [...variantRows];
+                        copy[idx].name = e.target.value;
+                        setVariantRows(copy);
+                      }} 
+                      style={{ flex: 2, padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', fontSize: '0.88rem' }} 
+                    />
+                    <input 
+                      type="number" 
+                      placeholder="Price (Rs.)" 
+                      value={vr.price} 
+                      onChange={e => {
+                        const copy = [...variantRows];
+                        copy[idx].price = e.target.value;
+                        setVariantRows(copy);
+                      }} 
+                      style={{ flex: 1, padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px', fontSize: '0.88rem' }} 
+                    />
+                    {variantRows.length > 1 && (
+                      <button 
+                        type="button" 
+                        onClick={() => setVariantRows(variantRows.filter((_, i) => i !== idx))}
+                        style={{ padding: '6px 10px', background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 800 }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Description</label>
                 <input type="text" value={editingMenuItem.description || ''} onChange={e => setEditingMenuItem({ ...editingMenuItem, description: e.target.value })} style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
@@ -727,7 +862,7 @@ export const AdminPage = () => {
                 <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                   <th style={{ padding: '10px 14px' }}>Item Name</th>
                   <th style={{ padding: '10px 14px' }}>Category</th>
-                  <th style={{ padding: '10px 14px' }}>Price(s)</th>
+                  <th style={{ padding: '10px 14px' }}>Price Variant(s)</th>
                   <th style={{ padding: '10px 14px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -736,7 +871,7 @@ export const AdminPage = () => {
                   .filter(i => !menuSearchFilter || i.name?.toLowerCase().includes(menuSearchFilter.toLowerCase()) || i.category?.toLowerCase().includes(menuSearchFilter.toLowerCase()))
                   .map(item => {
                     const priceDisplay = typeof item.prices === 'object' && item.prices !== null
-                      ? Object.entries(item.prices).map(([k, v]) => `${k.toUpperCase()}: Rs. ${v}`).join(', ')
+                      ? Object.entries(item.prices).map(([k, v]) => `${k}: Rs. ${v}`).join(' | ')
                       : `Rs. ${item.prices || item.price || 0}`;
                     return (
                       <tr key={item.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -744,8 +879,8 @@ export const AdminPage = () => {
                         <td style={{ padding: '10px 14px', color: 'var(--accent)', textTransform: 'capitalize' }}>{item.category}</td>
                         <td style={{ padding: '10px 14px', color: '#4ade80', fontWeight: 700 }}>{priceDisplay}</td>
                         <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                          <button onClick={() => setEditingMenuItem(item)} style={{ padding: '4px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--accent)', cursor: 'pointer', marginRight: '6px', fontSize: '0.8rem', fontWeight: 700 }}>✏️ Edit</button>
-                          <button onClick={() => handleDeleteMenuItem(item.id)} style={{ padding: '4px 10px', background: 'rgba(220,38,38,0.2)', border: '1px solid #dc2626', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>🗑️ Delete</button>
+                          <button onClick={() => openEditMenuItem(item)} style={{ padding: '4px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--accent)', cursor: 'pointer', marginRight: '6px', fontSize: '0.8rem', fontWeight: 700 }}>✏️ Edit</button>
+                          <button onClick={() => handleDeleteMenuItem(item.id)} style={{ padding: '4px 10px', background: 'rgba(220,38,38,0.2)', border: '1px solid #dc2626', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>🗑️ Solo Delete</button>
                         </td>
                       </tr>
                     );
@@ -754,6 +889,96 @@ export const AdminPage = () => {
             </table>
           </div>
         </div>
+
+        {/* Deals & Combos Management Card with Solo Delete */}
+        <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)', gridColumn: '1 / -1' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, color: 'var(--accent)', fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🏷️ Super Saver Deals & Combos Control ({dealsList.length} deals)</span>
+            </h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text"
+                placeholder="🔍 Search deal..."
+                value={dealSearchFilter}
+                onChange={e => setDealSearchFilter(e.target.value)}
+                style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: '#fff', fontSize: '0.88rem', minWidth: '220px' }}
+              />
+              <button 
+                onClick={() => setEditingDeal({ id: `deal_${Date.now()}`, name: '', tag: 'Special Combo', contents: '', price: 999, category: 'Deals', image: 'assets/hero_food_collage.png', show_on_home: false })}
+                className="btn btn-primary"
+                style={{ padding: '8px 16px', fontSize: '0.85rem', fontWeight: 800 }}
+              >
+                + Add New Deal
+              </button>
+            </div>
+          </div>
+
+          {dealMsg.text && (
+            <div style={{ padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', background: dealMsg.type === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(76,175,80,0.15)', border: `1px solid ${dealMsg.type === 'error' ? '#ef4444' : '#4caf50'}`, color: dealMsg.type === 'error' ? '#fca5a5' : '#4caf50', fontWeight: 'bold' }}>
+              {dealMsg.text}
+            </div>
+          )}
+
+          {editingDeal && (
+            <form onSubmit={handleSaveDeal} style={{ background: 'var(--bg-elevated)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--accent)' }}>
+              <h4 style={{ margin: '0 0 14px 0', color: 'var(--accent)' }}>Editing Deal: {editingDeal.name || 'New Combo Deal'}</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Deal Name</label>
+                  <input type="text" required value={editingDeal.name || ''} onChange={e => setEditingDeal({ ...editingDeal, name: e.target.value })} style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Tag / Badge</label>
+                  <input type="text" value={editingDeal.tag || ''} onChange={e => setEditingDeal({ ...editingDeal, tag: e.target.value })} placeholder="e.g. Super Saver" style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Price (Rs.)</label>
+                  <input type="number" required value={editingDeal.price || 0} onChange={e => setEditingDeal({ ...editingDeal, price: e.target.value })} style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
+                </div>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Deal Contents / Description</label>
+                <input type="text" value={editingDeal.contents || ''} onChange={e => setEditingDeal({ ...editingDeal, contents: e.target.value })} placeholder="e.g. 1 Large Pizza + 2 Zingers + 1.5L Drink" style={{ width: '100%', padding: '8px', background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#fff', borderRadius: '6px' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setEditingDeal(null)} className="btn btn-outline" style={{ padding: '8px 16px' }}>Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ padding: '8px 20px', fontWeight: 800 }}>Save Deal 💾</button>
+              </div>
+            </form>
+          )}
+
+          <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--border-light)', borderRadius: '10px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '10px 14px' }}>Deal Name</th>
+                  <th style={{ padding: '10px 14px' }}>Tag</th>
+                  <th style={{ padding: '10px 14px' }}>Contents</th>
+                  <th style={{ padding: '10px 14px' }}>Price</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dealsList
+                  .filter(d => !dealSearchFilter || d.name?.toLowerCase().includes(dealSearchFilter.toLowerCase()) || d.contents?.toLowerCase().includes(dealSearchFilter.toLowerCase()))
+                  .map(deal => (
+                    <tr key={deal.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#fff' }}>{deal.name}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--accent)' }}>{deal.tag || 'Special'}</td>
+                      <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{deal.contents}</td>
+                      <td style={{ padding: '10px 14px', color: '#4ade80', fontWeight: 700 }}>Rs. {deal.price}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                        <button onClick={() => setEditingDeal(deal)} style={{ padding: '4px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--accent)', cursor: 'pointer', marginRight: '6px', fontSize: '0.8rem', fontWeight: 700 }}>✏️ Edit</button>
+                        <button onClick={() => handleDeleteDeal(deal.id)} style={{ padding: '4px 10px', background: 'rgba(220,38,38,0.2)', border: '1px solid #dc2626', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>🗑️ Solo Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
 
         {/* Restaurant Info & Home Hero Settings Card */}
         <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '14px', border: '1px solid var(--border)' }}>
