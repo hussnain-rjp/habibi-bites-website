@@ -1123,7 +1123,7 @@
           justify: 'space-between', alignItems: 'flex-start', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))'
         }
       },
-        Array.from({ length: 45 }).map((_, idx) => 
+        Array.from({ length: 80 }).map((_, idx) => 
           React.createElement('div', {
             key: idx,
             style: { animation: `buntingSway ${3 + (idx % 3) * 0.5}s ease-in-out infinite ${(idx % 4) * 0.2}s`, transformOrigin: 'top center', flexShrink: 0 }

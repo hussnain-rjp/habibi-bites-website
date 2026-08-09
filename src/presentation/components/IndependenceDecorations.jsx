@@ -66,7 +66,7 @@ export const IndependenceDecorations = () => {
           filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))'
         }}
       >
-        {Array.from({ length: 45 }).map((_, idx) => (
+        {Array.from({ length: 80 }).map((_, idx) => (
           <div 
             key={idx} 
             style={{ 
