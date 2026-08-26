@@ -274,6 +274,11 @@
       const newStr = JSON.stringify(data);
       const existing = localStorage.getItem(key);
       if (existing === newStr) return;
+      if (existing) {
+        try {
+          if (JSON.stringify(JSON.parse(existing)) === newStr) return;
+        } catch (e) {}
+      }
       localStorage.setItem(key, newStr);
       window.dispatchEvent(new Event("storage_changed"));
     } catch (e) {}
@@ -822,12 +827,14 @@
 
     async saveDeliverySettings(enabled, fee, maxOrders) {
       if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
-      const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
+      const current = readStore(DB_KEYS.SETTINGS) || {};
+      const s = { ...current, enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
       writeStore(DB_KEYS.SETTINGS, s);
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
+            ...(existing || {}),
             id: 1,
             delivery_charge_enabled: s.enabled,
             delivery_charge_amount: s.fee,
@@ -841,9 +848,35 @@
     }
 
     async getSeasonalTheme() {
-      this.fetchSettingsDeduplicated();
-      const s = readStore(DB_KEYS.SETTINGS) || {};
-      return { enabled: s.seasonal_theme_enabled !== undefined ? !!s.seasonal_theme_enabled : true };
+      let localVal = undefined;
+      try {
+        const raw = localStorage.getItem('habibi_bites_delivery_settings');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.seasonal_theme_enabled !== undefined) localVal = !!parsed.seasonal_theme_enabled;
+        }
+      } catch (e) {}
+      if (!supabaseClient) {
+        return { enabled: localVal !== undefined ? localVal : true };
+      }
+      try {
+        const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+        if (!error && data && data.seasonal_theme_enabled !== undefined && data.seasonal_theme_enabled !== null) {
+          const enabled = !!data.seasonal_theme_enabled;
+          try {
+            const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
+            const parsed = JSON.parse(raw);
+            if (parsed.seasonal_theme_enabled !== enabled) {
+              parsed.seasonal_theme_enabled = enabled;
+              localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
+            }
+          } catch (e) {}
+          return { enabled };
+        }
+        return { enabled: localVal !== undefined ? localVal : true };
+      } catch (e) {
+        return { enabled: localVal !== undefined ? localVal : true };
+      }
     }
 
     async saveSeasonalTheme(enabled) {
@@ -855,12 +888,9 @@
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
+            ...(existing || {}),
             id: 1,
-            delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
-            delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
-            max_active_orders: existing?.max_active_orders ?? 50,
-            seasonal_theme_enabled: isEnabled,
-            discount_data: existing?.discount_data || null
+            seasonal_theme_enabled: isEnabled
           };
           await supabaseClient.from('settings').upsert(payload);
         } catch (err) {}
@@ -1071,7 +1101,16 @@
   const repo = new FullBrowserRepository();
 
   function IndependenceDecorationsOverlay() {
-    const [enabled, setEnabled] = useState(true);
+    const [enabled, setEnabled] = useState(() => {
+      try {
+        const raw = localStorage.getItem('habibi_bites_delivery_settings');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.seasonal_theme_enabled !== undefined) return !!parsed.seasonal_theme_enabled;
+        }
+      } catch (e) {}
+      return true;
+    });
 
     useEffect(() => {
       let isMounted = true;
@@ -1079,7 +1118,7 @@
         try {
           if (repo && repo.getSeasonalTheme) {
             const res = await repo.getSeasonalTheme();
-            if (isMounted) setEnabled(res.enabled);
+            if (isMounted && typeof res.enabled === 'boolean') setEnabled(res.enabled);
           } else {
             const raw = localStorage.getItem('habibi_bites_delivery_settings');
             if (raw) {
@@ -1098,10 +1137,31 @@
       window.addEventListener('storage_changed', handleStorageChange);
       window.addEventListener('storage', handleStorageChange);
 
+      const pollInterval = setInterval(loadThemeState, 3000);
+
+      let channel = null;
+      if (supabaseClient && supabaseClient.channel) {
+        try {
+          channel = supabaseClient.channel('public-settings-theme-js')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, (payload) => {
+              if (payload.new && payload.new.seasonal_theme_enabled !== undefined) {
+                if (isMounted) setEnabled(!!payload.new.seasonal_theme_enabled);
+              } else {
+                loadThemeState();
+              }
+            })
+            .subscribe();
+        } catch (err) {}
+      }
+
       return () => {
         isMounted = false;
         window.removeEventListener('storage_changed', handleStorageChange);
         window.removeEventListener('storage', handleStorageChange);
+        clearInterval(pollInterval);
+        if (channel && supabaseClient && supabaseClient.removeChannel) {
+          try { supabaseClient.removeChannel(channel); } catch (err) {}
+        }
       };
     }, []);
 
@@ -1447,7 +1507,16 @@
     const [discountRule, setDiscountRule] = useState(null);
     const [restInfo, setRestInfo] = useState(null);
     const [homeDeals, setHomeDeals] = useState([]);
-    const [azaadiTheme, setAzaadiTheme] = useState(false);
+    const [azaadiTheme, setAzaadiTheme] = useState(() => {
+      try {
+        const raw = localStorage.getItem('habibi_bites_delivery_settings');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.seasonal_theme_enabled !== undefined) return !!parsed.seasonal_theme_enabled;
+        }
+      } catch (e) {}
+      return true;
+    });
     useEffect(() => {
       const loadData = () => {
         repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
@@ -1464,7 +1533,13 @@
       };
       loadData();
       window.addEventListener('storage_changed', loadData);
-      return () => window.removeEventListener('storage_changed', loadData);
+      window.addEventListener('storage', loadData);
+      const pollInterval = setInterval(loadData, 3000);
+      return () => {
+        window.removeEventListener('storage_changed', loadData);
+        window.removeEventListener('storage', loadData);
+        clearInterval(pollInterval);
+      };
     }, []);
 
     const deals = window.HABIBI_DEALS || [];
@@ -3020,14 +3095,15 @@
             onClick: async () => {
               const next = !seasonalThemeInput;
               setSeasonalThemeInput(next);
-              if (repo.saveSeasonalTheme) {
-                await repo.saveSeasonalTheme(next);
-              } else {
+              try {
                 const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
                 const parsed = JSON.parse(raw);
                 parsed.seasonal_theme_enabled = next;
                 localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
                 window.dispatchEvent(new Event('storage_changed'));
+              } catch (e) {}
+              if (repo.saveSeasonalTheme) {
+                await repo.saveSeasonalTheme(next);
               }
             },
             style: {

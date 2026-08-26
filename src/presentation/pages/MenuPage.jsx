@@ -12,34 +12,44 @@ export const MenuPage = () => {
   const [discountRule, setDiscountRule] = useState(null);
 
   useEffect(() => {
-    loadData();
-    const handleStorage = () => {
-      db.getDiscountSettings().then(setDiscountRule).catch(() => {});
+    let isMounted = true;
+    const loadData = async () => {
+      try {
+        const [fetchedItems, fetchedDiscount] = await Promise.all([
+          db.getMenuItems(),
+          db.getDiscountSettings()
+        ]);
+        if (!isMounted) return;
+
+        if (fetchedItems && Array.isArray(fetchedItems)) {
+          setItems(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedItems) ? fetchedItems : prev));
+        }
+        if (fetchedDiscount) {
+          setDiscountRule(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDiscount) ? fetchedDiscount : prev));
+        }
+
+        const defaultCategories = window.HABIBI_MENU?.categories || [
+          { id: "pizza", name: "Pizzas" },
+          { id: "special_pizza", name: "Special Pizza" },
+          { id: "burgers", name: "Burgers" },
+          { id: "wraps", name: "Wraps & Rolls" },
+          { id: "desi", name: "Desi & Broast" },
+          { id: "starters", name: "Starters & Sides" },
+          { id: "pasta", name: "Pastas" },
+          { id: "drinks", name: "Chil Side & Desserts" }
+        ];
+        setCategories(defaultCategories);
+        if (defaultCategories.length > 0) setActiveCategory(prev => prev || defaultCategories[0].id);
+      } catch (e) {}
     };
-    window.addEventListener('storage_changed', handleStorage);
-    return () => window.removeEventListener('storage_changed', handleStorage);
-  }, []);
 
-  const loadData = async () => {
-    const fetchedItems = await db.getMenuItems();
-    setItems(fetchedItems);
-
-    const fetchedDiscount = await db.getDiscountSettings();
-    setDiscountRule(fetchedDiscount);
-
-    const defaultCategories = window.HABIBI_MENU?.categories || [
-      { id: "pizza", name: "Pizzas" },
-      { id: "special_pizza", name: "Special Pizza" },
-      { id: "burgers", name: "Burgers" },
-      { id: "wraps", name: "Wraps & Rolls" },
-      { id: "desi", name: "Desi & Broast" },
-      { id: "starters", name: "Starters & Sides" },
-      { id: "pasta", name: "Pastas" },
-      { id: "drinks", name: "Chil Side & Desserts" }
-    ];
-    setCategories(defaultCategories);
-    if (defaultCategories.length > 0) setActiveCategory(defaultCategories[0].id);
-  };
+    loadData();
+    window.addEventListener('storage_changed', loadData);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage_changed', loadData);
+    };
+  }, [db]);
 
   const scrollToSection = (catId) => {
     setActiveCategory(catId);

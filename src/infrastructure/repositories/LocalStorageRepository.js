@@ -34,8 +34,15 @@ function writeStore(key, data) {
     const newStr = JSON.stringify(data);
     const existing = localStorage.getItem(key);
     if (existing === newStr) return;
+    if (existing) {
+      try {
+        if (JSON.stringify(JSON.parse(existing)) === newStr) return;
+      } catch (e) {}
+    }
     localStorage.setItem(key, newStr);
-    window.dispatchEvent(new Event("storage_changed"));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event("storage_changed"));
+    }
   } catch (e) {
     console.error("Storage Write Error", e);
   }

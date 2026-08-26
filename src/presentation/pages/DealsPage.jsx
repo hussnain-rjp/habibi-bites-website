@@ -8,17 +8,31 @@ export const DealsPage = () => {
   const [discountRule, setDiscountRule] = useState(null);
 
   useEffect(() => {
-    loadDeals();
-    const loadDisc = () => db.getDiscountSettings().then(setDiscountRule).catch(() => {});
-    loadDisc();
-    window.addEventListener('storage_changed', loadDisc);
-    return () => window.removeEventListener('storage_changed', loadDisc);
-  }, []);
+    let isMounted = true;
+    const loadData = async () => {
+      try {
+        const [fetchedDeals, fetchedDiscount] = await Promise.all([
+          db.getDeals(),
+          db.getDiscountSettings()
+        ]);
+        if (!isMounted) return;
 
-  const loadDeals = async () => {
-    const fetchedDeals = await db.getDeals();
-    setDeals(fetchedDeals);
-  };
+        if (fetchedDeals && Array.isArray(fetchedDeals)) {
+          setDeals(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDeals) ? fetchedDeals : prev));
+        }
+        if (fetchedDiscount) {
+          setDiscountRule(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDiscount) ? fetchedDiscount : prev));
+        }
+      } catch (e) {}
+    };
+
+    loadData();
+    window.addEventListener('storage_changed', loadData);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage_changed', loadData);
+    };
+  }, [db]);
 
   return (
     <main className="section-container page-top-margin">

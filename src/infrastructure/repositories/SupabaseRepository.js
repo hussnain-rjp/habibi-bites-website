@@ -145,16 +145,61 @@ export class SupabaseRepository extends IRepository {
 
   // ── Deals ─────────────────────────────────────────────────────────────────
 
+  // ── Deals ─────────────────────────────────────────────────────────────────
+
   async getDeals() {
-    if (!this.client) return [];
-    checkRateLimit('deals', 'publicRead');
-    recordAttempt('deals', 'publicRead');
-    const { data, error } = await this.client.from('deals').select('*').order('id', { ascending: true });
-    if (error) return [];
-    return data || [];
+    let fallback = (typeof window !== 'undefined' && window.HABIBI_DEALS) ? window.HABIBI_DEALS : [];
+    if (!this.client) return fallback;
+
+    const FETCH_TTL = 30000;
+    const now = Date.now();
+    if (typeof window !== 'undefined') {
+      window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
+      window.__HABIBI_INFLIGHT = window.__HABIBI_INFLIGHT || {};
+      window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+    }
+
+    const lastFetch = window.__HABIBI_LAST_FETCH?.['deals'] || 0;
+    const cachedData = window.__HABIBI_MEMORY_STORE?.['deals'];
+
+    if (cachedData && (now - lastFetch < FETCH_TTL)) {
+      return cachedData;
+    }
+
+    if (window.__HABIBI_INFLIGHT?.['deals']) {
+      await window.__HABIBI_INFLIGHT['deals'];
+      return window.__HABIBI_MEMORY_STORE?.['deals'] || cachedData || fallback;
+    }
+
+    try {
+      checkRateLimit('deals', 'publicRead');
+      recordAttempt('deals', 'publicRead');
+      window.__HABIBI_INFLIGHT['deals'] = this.client
+        .from('deals')
+        .select('*')
+        .order('id', { ascending: true })
+        .then(({ data, error }) => {
+          window.__HABIBI_LAST_FETCH['deals'] = Date.now();
+          delete window.__HABIBI_INFLIGHT['deals'];
+          if (!error && Array.isArray(data)) {
+            window.__HABIBI_MEMORY_STORE['deals'] = data;
+          }
+          return data;
+        })
+        .catch(err => {
+          delete window.__HABIBI_INFLIGHT['deals'];
+          return null;
+        });
+
+      const res = await window.__HABIBI_INFLIGHT['deals'];
+      return res || cachedData || fallback;
+    } catch (e) {
+      return cachedData || fallback;
+    }
   }
 
   async saveDeal(deal) {
+    if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH['deals'] = 0;
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
     const payload = {
@@ -181,6 +226,7 @@ export class SupabaseRepository extends IRepository {
   }
 
   async deleteDeal(id) {
+    if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH['deals'] = 0;
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
     const targetId = String(id);
@@ -302,12 +348,55 @@ export class SupabaseRepository extends IRepository {
   // ── Reviews ───────────────────────────────────────────────────────────────
 
   async getReviews() {
-    if (!this.client) return [];
-    checkRateLimit('reviews', 'publicRead');
-    recordAttempt('reviews', 'publicRead');
-    const { data, error } = await this.client.from('reviews').select('*').eq('approved', true).order('date', { ascending: false });
-    if (error) return [];
-    return data || [];
+    let fallback = [];
+    if (!this.client) return fallback;
+
+    const FETCH_TTL = 30000;
+    const now = Date.now();
+    if (typeof window !== 'undefined') {
+      window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
+      window.__HABIBI_INFLIGHT = window.__HABIBI_INFLIGHT || {};
+      window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+    }
+
+    const lastFetch = window.__HABIBI_LAST_FETCH?.['reviews'] || 0;
+    const cachedData = window.__HABIBI_MEMORY_STORE?.['reviews'];
+
+    if (cachedData && (now - lastFetch < FETCH_TTL)) {
+      return cachedData;
+    }
+
+    if (window.__HABIBI_INFLIGHT?.['reviews']) {
+      await window.__HABIBI_INFLIGHT['reviews'];
+      return window.__HABIBI_MEMORY_STORE?.['reviews'] || cachedData || fallback;
+    }
+
+    try {
+      checkRateLimit('reviews', 'publicRead');
+      recordAttempt('reviews', 'publicRead');
+      window.__HABIBI_INFLIGHT['reviews'] = this.client
+        .from('reviews')
+        .select('*')
+        .eq('approved', true)
+        .order('date', { ascending: false })
+        .then(({ data, error }) => {
+          window.__HABIBI_LAST_FETCH['reviews'] = Date.now();
+          delete window.__HABIBI_INFLIGHT['reviews'];
+          if (!error && Array.isArray(data)) {
+            window.__HABIBI_MEMORY_STORE['reviews'] = data;
+          }
+          return data;
+        })
+        .catch(err => {
+          delete window.__HABIBI_INFLIGHT['reviews'];
+          return null;
+        });
+
+      const res = await window.__HABIBI_INFLIGHT['reviews'];
+      return res || cachedData || fallback;
+    } catch (e) {
+      return cachedData || fallback;
+    }
   }
 
   async getPendingReviews() {
@@ -387,18 +476,132 @@ export class SupabaseRepository extends IRepository {
 
   // ── Settings ──────────────────────────────────────────────────────────────
 
-  async getDeliverySettings() {
-    if (!this.client) return { enabled: false, fee: 150, maxOrders: 50 };
-    const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (error || !data) return { enabled: false, fee: 150, maxOrders: 50 };
-    return {
-      enabled: data.delivery_charge_enabled,
-      fee: data.delivery_charge_amount,
-      maxOrders: data.max_active_orders
+  async fetchSettingsDeduplicated() {
+    const defaultInfo = {
+      name: 'Habibi Bites',
+      tagline: 'Fast Food & Traditional Kitchen',
+      address: 'Qila Didar Singh, Gujranwala',
+      phone: '0302-4411700',
+      email: 'habibibites@gmail.com',
+      heroImage: '',
+      heroText: ''
     };
+    const defaultDiscount = { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
+    const defaultDelivery = { enabled: false, fee: 150, maxOrders: 50 };
+
+    let storeSettings = {};
+    try {
+      const raw = localStorage.getItem('habibi_bites_delivery_settings');
+      if (raw) storeSettings = JSON.parse(raw);
+    } catch (e) {}
+
+    const FETCH_TTL = 30000;
+    const now = Date.now();
+    if (typeof window !== 'undefined') {
+      window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
+      window.__HABIBI_INFLIGHT = window.__HABIBI_INFLIGHT || {};
+      window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
+    }
+
+    const lastFetch = window.__HABIBI_LAST_FETCH?.['settings'] || 0;
+    if (this.client && (now - lastFetch > FETCH_TTL)) {
+      if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT['settings']) {
+        window.__HABIBI_INFLIGHT['settings'] = this.client
+          .from('settings')
+          .select('*')
+          .eq('id', 1)
+          .maybeSingle()
+          .then(({ data, error }) => {
+            if (typeof window !== 'undefined') {
+              window.__HABIBI_LAST_FETCH['settings'] = Date.now();
+              delete window.__HABIBI_INFLIGHT['settings'];
+            }
+            if (!error && data) {
+              window.__HABIBI_MEMORY_STORE['settings_raw'] = data;
+              let parsedDisc = data.discount_data;
+              if (typeof parsedDisc === 'string') {
+                try { parsedDisc = JSON.parse(parsedDisc); } catch (e) { parsedDisc = null; }
+              }
+              let parsedRest = data.restaurant_info;
+              if (typeof parsedRest === 'string') {
+                try { parsedRest = JSON.parse(parsedRest); } catch (e) { parsedRest = null; }
+              }
+              const merged = {
+                ...storeSettings,
+                enabled: !!data.delivery_charge_enabled,
+                fee: parseFloat(data.delivery_charge_amount) || 0,
+                maxOrders: parseInt(data.max_active_orders) || 50,
+                seasonal_theme_enabled: data.seasonal_theme_enabled !== undefined ? !!data.seasonal_theme_enabled : true,
+                discount_data: parsedDisc || storeSettings.discount_data || null,
+                restaurant_info: parsedRest || storeSettings.restaurant_info || null
+              };
+              try {
+                const newStr = JSON.stringify(merged);
+                const existing = localStorage.getItem('habibi_bites_delivery_settings');
+                if (existing !== newStr) {
+                  localStorage.setItem('habibi_bites_delivery_settings', newStr);
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('storage_changed'));
+                  }
+                }
+              } catch (e) {}
+            }
+          })
+          .catch(() => {
+            if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT['settings'];
+          });
+      }
+    }
+
+    if (window.__HABIBI_INFLIGHT?.['settings']) {
+      await window.__HABIBI_INFLIGHT['settings'];
+    }
+
+    const rawData = window.__HABIBI_MEMORY_STORE?.['settings_raw'];
+    let disc = defaultDiscount;
+    let rest = defaultInfo;
+    let deliv = defaultDelivery;
+    let themeEnabled = true;
+
+    if (rawData) {
+      if (rawData.discount_data) {
+        disc = typeof rawData.discount_data === 'string' ? JSON.parse(rawData.discount_data) : rawData.discount_data;
+      }
+      if (rawData.restaurant_info) {
+        const parsedR = typeof rawData.restaurant_info === 'string' ? JSON.parse(rawData.restaurant_info) : rawData.restaurant_info;
+        rest = { ...defaultInfo, ...parsedR };
+      }
+      deliv = {
+        enabled: !!rawData.delivery_charge_enabled,
+        fee: parseFloat(rawData.delivery_charge_amount) || 0,
+        maxOrders: parseInt(rawData.max_active_orders) || 50
+      };
+      if (rawData.seasonal_theme_enabled !== undefined && rawData.seasonal_theme_enabled !== null) {
+        themeEnabled = !!rawData.seasonal_theme_enabled;
+      }
+    } else if (storeSettings) {
+      if (storeSettings.discount_data) disc = storeSettings.discount_data;
+      if (storeSettings.restaurant_info) rest = { ...defaultInfo, ...storeSettings.restaurant_info };
+      deliv = {
+        enabled: !!storeSettings.enabled,
+        fee: parseFloat(storeSettings.fee) || 0,
+        maxOrders: parseInt(storeSettings.maxOrders) || 50
+      };
+      if (storeSettings.seasonal_theme_enabled !== undefined) {
+        themeEnabled = !!storeSettings.seasonal_theme_enabled;
+      }
+    }
+
+    return { delivery: deliv, discount: disc, restaurant: rest, seasonalTheme: { enabled: themeEnabled } };
+  }
+
+  async getDeliverySettings() {
+    const res = await this.fetchSettingsDeduplicated();
+    return res.delivery;
   }
 
   async saveDeliverySettings(enabled, fee, maxOrders) {
+    if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH['settings'] = 0;
     // ── Strict schema validation ──
     const { valid, errors } = validateForm(
       { fee: 'deliveryFee', maxOrders: 'maxOrders' },
@@ -414,6 +617,7 @@ export class SupabaseRepository extends IRepository {
     recordAttempt('admin_write', 'authenticatedAction');
     const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
     const payload = {
+      ...(existing || {}),
       id: 1,
       delivery_charge_enabled: !!enabled,
       delivery_charge_amount: parseFloat(fee) || 0,
@@ -426,29 +630,18 @@ export class SupabaseRepository extends IRepository {
   }
 
   async getDiscountSettings() {
-    const defaultDiscount = { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
-    if (!this.client) return defaultDiscount;
-    try {
-      checkRateLimit('discount', 'publicRead');
-      recordAttempt('discount', 'publicRead');
-      const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
-      if (error || !data || !data.discount_data) return defaultDiscount;
-      return typeof data.discount_data === 'string' ? JSON.parse(data.discount_data) : data.discount_data;
-    } catch (e) {
-      console.warn("SupabaseRepository getDiscountSettings warning:", e.message);
-      return defaultDiscount;
-    }
+    const res = await this.fetchSettingsDeduplicated();
+    return res.discount;
   }
 
   async saveDiscountSettings(discountData) {
+    if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH['settings'] = 0;
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
     const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
     const payload = {
+      ...(existing || {}),
       id: 1,
-      delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
-      delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
-      max_active_orders: existing?.max_active_orders ?? 50,
       discount_data: discountData
     };
     const { error } = await this.client.from('settings').upsert(payload);
@@ -457,35 +650,38 @@ export class SupabaseRepository extends IRepository {
   }
 
   async getSeasonalTheme() {
-    if (!this.client) return { enabled: true };
-    try {
-      const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
-      if (error || !data) return { enabled: true };
-      if (data.seasonal_theme_enabled !== undefined && data.seasonal_theme_enabled !== null) {
-        return { enabled: !!data.seasonal_theme_enabled };
-      }
-      return { enabled: true };
-    } catch (e) {
-      return { enabled: true };
-    }
+    const res = await this.fetchSettingsDeduplicated();
+    return res.seasonalTheme;
   }
 
   async saveSeasonalTheme(enabled) {
+    if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH['settings'] = 0;
     const isEnabled = !!enabled;
+    try {
+      const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
+      const parsed = JSON.parse(raw);
+      parsed.seasonal_theme_enabled = isEnabled;
+      localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('storage_changed'));
+      }
+    } catch (e) {}
+
     if (this.client) {
-      checkRateLimit('admin_write', 'authenticatedAction');
-      recordAttempt('admin_write', 'authenticatedAction');
-      const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
-      const payload = {
-        id: 1,
-        delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
-        delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
-        max_active_orders: existing?.max_active_orders ?? 50,
-        seasonal_theme_enabled: isEnabled,
-        discount_data: existing?.discount_data || null
-      };
-      const { error } = await this.client.from('settings').upsert(payload);
-      if (error) console.warn("Supabase saveSeasonalTheme warning:", error.message);
+      try {
+        checkRateLimit('admin_write', 'authenticatedAction');
+        recordAttempt('admin_write', 'authenticatedAction');
+        const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
+        const payload = {
+          ...(existing || {}),
+          id: 1,
+          seasonal_theme_enabled: isEnabled
+        };
+        const { error } = await this.client.from('settings').upsert(payload);
+        if (error) console.warn("Supabase saveSeasonalTheme warning:", error.message);
+      } catch (err) {
+        console.warn("Supabase saveSeasonalTheme error:", err.message);
+      }
     }
     return { enabled: isEnabled };
   }
@@ -639,39 +835,19 @@ export class SupabaseRepository extends IRepository {
   // ── Restaurant Info & Branding ──────────────────────────────────────────────
 
   async getRestaurantInfo() {
-    const defaultInfo = {
-      name: 'Habibi Bites',
-      tagline: 'Fast Food & Traditional Kitchen',
-      address: 'Qila Didar Singh, Gujranwala',
-      phone: '0302-4411700',
-      email: 'habibibites@gmail.com',
-      heroImage: '',
-      heroText: ''
-    };
-    if (!this.client) return defaultInfo;
-    try {
-      const { data, error } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
-      if (!error && data && data.restaurant_info) {
-        const parsed = typeof data.restaurant_info === 'string' ? JSON.parse(data.restaurant_info) : data.restaurant_info;
-        if (parsed) return { ...defaultInfo, ...parsed };
-      }
-    } catch (e) {
-      console.warn("SupabaseRepository getRestaurantInfo error:", e);
-    }
-    return defaultInfo;
+    const res = await this.fetchSettingsDeduplicated();
+    return res.restaurant;
   }
 
   async saveRestaurantInfo(info) {
+    if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH['settings'] = 0;
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
     if (!this.client) return info;
     const { data: existing } = await this.client.from('settings').select('*').eq('id', 1).maybeSingle();
     const payload = {
+      ...(existing || {}),
       id: 1,
-      delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
-      delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
-      max_active_orders: existing?.max_active_orders ?? 50,
-      discount_data: existing?.discount_data || null,
       restaurant_info: info
     };
     const { error } = await this.client.from('settings').upsert(payload);

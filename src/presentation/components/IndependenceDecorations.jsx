@@ -8,7 +8,18 @@ import { useDb } from '../contexts/DbContext.jsx';
  */
 export const IndependenceDecorations = () => {
   const db = useDb();
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => {
+    try {
+      const raw = localStorage.getItem('habibi_bites_delivery_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.seasonal_theme_enabled !== undefined) {
+          return !!parsed.seasonal_theme_enabled;
+        }
+      }
+    } catch (e) {}
+    return true;
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -16,7 +27,9 @@ export const IndependenceDecorations = () => {
       try {
         if (db && db.getSeasonalTheme) {
           const res = await db.getSeasonalTheme();
-          if (isMounted) setEnabled(res.enabled);
+          if (isMounted && typeof res.enabled === 'boolean') {
+            setEnabled(res.enabled);
+          }
         } else {
           const raw = localStorage.getItem('habibi_bites_delivery_settings');
           if (raw) {
@@ -37,10 +50,31 @@ export const IndependenceDecorations = () => {
     window.addEventListener('storage_changed', handleStorageChange);
     window.addEventListener('storage', handleStorageChange);
 
+    const pollInterval = setInterval(loadThemeState, 3000);
+
+    let channel = null;
+    if (db && db.client && db.client.channel) {
+      try {
+        channel = db.client.channel('public-settings-theme')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, (payload) => {
+            if (payload.new && payload.new.seasonal_theme_enabled !== undefined) {
+              if (isMounted) setEnabled(!!payload.new.seasonal_theme_enabled);
+            } else {
+              loadThemeState();
+            }
+          })
+          .subscribe();
+      } catch (err) {}
+    }
+
     return () => {
       isMounted = false;
       window.removeEventListener('storage_changed', handleStorageChange);
       window.removeEventListener('storage', handleStorageChange);
+      clearInterval(pollInterval);
+      if (channel && db && db.client && db.client.removeChannel) {
+        try { db.client.removeChannel(channel); } catch (err) {}
+      }
     };
   }, [db]);
 

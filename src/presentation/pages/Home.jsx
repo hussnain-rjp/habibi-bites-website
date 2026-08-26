@@ -7,21 +7,62 @@ export const Home = ({ setActivePage }) => {
   const [featuredDeals, setFeaturedDeals] = useState([]);
   const [discountRule, setDiscountRule] = useState(null);
   const [restInfo, setRestInfo] = useState(null);
-  const [themeEnabled, setThemeEnabled] = useState(false);
+  const [themeEnabled, setThemeEnabled] = useState(() => {
+    try {
+      const raw = localStorage.getItem('habibi_bites_delivery_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.seasonal_theme_enabled !== undefined) {
+          return !!parsed.seasonal_theme_enabled;
+        }
+      }
+    } catch (e) {}
+    return true;
+  });
 
   useEffect(() => {
-    loadDeals();
-    const loadDisc = () => {
-      db.getDiscountSettings().then(setDiscountRule).catch(() => {});
-      db.getRestaurantInfo().then(setRestInfo).catch(() => {});
-      if (db.getSeasonalTheme) {
-        db.getSeasonalTheme().then(res => setThemeEnabled(!!res.enabled)).catch(() => {});
-      }
+    let isMounted = true;
+    const loadData = async () => {
+      try {
+        const [deals, disc, info, theme] = await Promise.all([
+          db.getDeals(),
+          db.getDiscountSettings(),
+          db.getRestaurantInfo(),
+          db.getSeasonalTheme ? db.getSeasonalTheme() : Promise.resolve(null)
+        ]);
+        if (!isMounted) return;
+
+        if (deals && Array.isArray(deals)) {
+          const selected = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
+          const finalDeals = selected.length > 0 ? selected : deals.slice(0, 4);
+          setFeaturedDeals(prev => (JSON.stringify(prev) !== JSON.stringify(finalDeals) ? finalDeals : prev));
+        }
+
+        if (disc) {
+          setDiscountRule(prev => (JSON.stringify(prev) !== JSON.stringify(disc) ? disc : prev));
+        }
+
+        if (info) {
+          setRestInfo(prev => (JSON.stringify(prev) !== JSON.stringify(info) ? info : prev));
+        }
+
+        if (theme && typeof theme.enabled === 'boolean') {
+          setThemeEnabled(prev => (prev !== theme.enabled ? theme.enabled : prev));
+        }
+      } catch (e) {}
     };
-    loadDisc();
-    window.addEventListener('storage_changed', loadDisc);
-    return () => window.removeEventListener('storage_changed', loadDisc);
-  }, []);
+
+    loadData();
+    window.addEventListener('storage_changed', loadData);
+    window.addEventListener('storage', loadData);
+    const pollInterval = setInterval(loadData, 3000);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage_changed', loadData);
+      window.removeEventListener('storage', loadData);
+      clearInterval(pollInterval);
+    };
+  }, [db]);
 
   const loadDeals = async () => {
     const deals = await db.getDeals();

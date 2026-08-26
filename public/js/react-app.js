@@ -274,6 +274,11 @@
       const newStr = JSON.stringify(data);
       const existing = localStorage.getItem(key);
       if (existing === newStr) return;
+      if (existing) {
+        try {
+          if (JSON.stringify(JSON.parse(existing)) === newStr) return;
+        } catch (e) {}
+      }
       localStorage.setItem(key, newStr);
       window.dispatchEvent(new Event("storage_changed"));
     } catch (e) {}
@@ -332,7 +337,9 @@
     }
   }
 
-  const DEFAULT_ORDERS = []; const FETCH_TTL = 15000; // 15s SWR cache window
+  const DEFAULT_ORDERS = [];
+
+  const FETCH_TTL = 15000; // 15s SWR cache window
 
   if (typeof window !== 'undefined') {
     window.__HABIBI_INFLIGHT = window.__HABIBI_INFLIGHT || {};
@@ -820,12 +827,14 @@
 
     async saveDeliverySettings(enabled, fee, maxOrders) {
       if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
-      const s = { enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
+      const current = readStore(DB_KEYS.SETTINGS) || {};
+      const s = { ...current, enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
       writeStore(DB_KEYS.SETTINGS, s);
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
+            ...(existing || {}),
             id: 1,
             delivery_charge_enabled: s.enabled,
             delivery_charge_amount: s.fee,
@@ -839,9 +848,35 @@
     }
 
     async getSeasonalTheme() {
-      this.fetchSettingsDeduplicated();
-      const s = readStore(DB_KEYS.SETTINGS) || {};
-      return { enabled: s.seasonal_theme_enabled !== undefined ? !!s.seasonal_theme_enabled : true };
+      let localVal = undefined;
+      try {
+        const raw = localStorage.getItem('habibi_bites_delivery_settings');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.seasonal_theme_enabled !== undefined) localVal = !!parsed.seasonal_theme_enabled;
+        }
+      } catch (e) {}
+      if (!supabaseClient) {
+        return { enabled: localVal !== undefined ? localVal : true };
+      }
+      try {
+        const { data, error } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
+        if (!error && data && data.seasonal_theme_enabled !== undefined && data.seasonal_theme_enabled !== null) {
+          const enabled = !!data.seasonal_theme_enabled;
+          try {
+            const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
+            const parsed = JSON.parse(raw);
+            if (parsed.seasonal_theme_enabled !== enabled) {
+              parsed.seasonal_theme_enabled = enabled;
+              localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
+            }
+          } catch (e) {}
+          return { enabled };
+        }
+        return { enabled: localVal !== undefined ? localVal : true };
+      } catch (e) {
+        return { enabled: localVal !== undefined ? localVal : true };
+      }
     }
 
     async saveSeasonalTheme(enabled) {
@@ -853,12 +888,9 @@
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
+            ...(existing || {}),
             id: 1,
-            delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
-            delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
-            max_active_orders: existing?.max_active_orders ?? 50,
-            seasonal_theme_enabled: isEnabled,
-            discount_data: existing?.discount_data || null
+            seasonal_theme_enabled: isEnabled
           };
           await supabaseClient.from('settings').upsert(payload);
         } catch (err) {}
@@ -923,12 +955,9 @@
           };
           const { error } = await supabaseClient.from('settings').upsert(payload);
           if (error) {
-            console.warn("Supabase saveRestaurantInfo error (trying stringified):", error.message);
             await supabaseClient.from('settings').upsert({ ...payload, restaurant_info: JSON.stringify(info) });
           }
-        } catch (err) {
-          console.warn("Supabase saveRestaurantInfo fallback:", err);
-        }
+        } catch (err) {}
       }
       return info;
     }
@@ -1072,7 +1101,16 @@
   const repo = new FullBrowserRepository();
 
   function IndependenceDecorationsOverlay() {
-    const [enabled, setEnabled] = useState(true);
+    const [enabled, setEnabled] = useState(() => {
+      try {
+        const raw = localStorage.getItem('habibi_bites_delivery_settings');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.seasonal_theme_enabled !== undefined) return !!parsed.seasonal_theme_enabled;
+        }
+      } catch (e) {}
+      return true;
+    });
 
     useEffect(() => {
       let isMounted = true;
@@ -1080,7 +1118,7 @@
         try {
           if (repo && repo.getSeasonalTheme) {
             const res = await repo.getSeasonalTheme();
-            if (isMounted) setEnabled(res.enabled);
+            if (isMounted && typeof res.enabled === 'boolean') setEnabled(res.enabled);
           } else {
             const raw = localStorage.getItem('habibi_bites_delivery_settings');
             if (raw) {
@@ -1099,10 +1137,31 @@
       window.addEventListener('storage_changed', handleStorageChange);
       window.addEventListener('storage', handleStorageChange);
 
+      const pollInterval = setInterval(loadThemeState, 3000);
+
+      let channel = null;
+      if (supabaseClient && supabaseClient.channel) {
+        try {
+          channel = supabaseClient.channel('public-settings-theme-js')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, (payload) => {
+              if (payload.new && payload.new.seasonal_theme_enabled !== undefined) {
+                if (isMounted) setEnabled(!!payload.new.seasonal_theme_enabled);
+              } else {
+                loadThemeState();
+              }
+            })
+            .subscribe();
+        } catch (err) {}
+      }
+
       return () => {
         isMounted = false;
         window.removeEventListener('storage_changed', handleStorageChange);
         window.removeEventListener('storage', handleStorageChange);
+        clearInterval(pollInterval);
+        if (channel && supabaseClient && supabaseClient.removeChannel) {
+          try { supabaseClient.removeChannel(channel); } catch (err) {}
+        }
       };
     }, []);
 
@@ -1448,8 +1507,16 @@
     const [discountRule, setDiscountRule] = useState(null);
     const [restInfo, setRestInfo] = useState(null);
     const [homeDeals, setHomeDeals] = useState([]);
-    const [azaadiTheme, setAzaadiTheme] = useState(false);
-
+    const [azaadiTheme, setAzaadiTheme] = useState(() => {
+      try {
+        const raw = localStorage.getItem('habibi_bites_delivery_settings');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.seasonal_theme_enabled !== undefined) return !!parsed.seasonal_theme_enabled;
+        }
+      } catch (e) {}
+      return true;
+    });
     useEffect(() => {
       const loadData = () => {
         repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
@@ -1466,7 +1533,13 @@
       };
       loadData();
       window.addEventListener('storage_changed', loadData);
-      return () => window.removeEventListener('storage_changed', loadData);
+      window.addEventListener('storage', loadData);
+      const pollInterval = setInterval(loadData, 3000);
+      return () => {
+        window.removeEventListener('storage_changed', loadData);
+        window.removeEventListener('storage', loadData);
+        clearInterval(pollInterval);
+      };
     }, []);
 
     const deals = window.HABIBI_DEALS || [];
@@ -1561,7 +1634,7 @@
       window.addEventListener('storage_changed', load);
       window.addEventListener('storage', load);
 
-      // Realtime sync: reload discount when settings change on any device
+      // Realtime sync: reload discount/delivery when settings change on any device
       let settingsChannel = null;
       if (supabaseClient) {
         try {
@@ -2041,7 +2114,6 @@
     }
   }
 
-  // --- ADMIN DASHBOARD WITH CUSTOM IMAGE UPLOAD SUPPORT FROM PC ---
   function AdminView({ isAdmin, setIsAdmin }) {
     const [u, setU] = useState('');
     const [p, setP] = useState('');
@@ -2202,6 +2274,7 @@
     }, [isAdmin, adminTab]);
 
     const loadDashboard = async (isInitial = false) => {
+      // Always refresh orders from Supabase (fast — orders only)
       const latestOrders = await repo.getOrders();
       setOrders(latestOrders);
 
@@ -2218,6 +2291,7 @@
       }
       prevOrdersRef.current = latestOrders;
 
+      // Only refresh pending reviews, menu, deals on initial load (heavy)
       if (isInitial) {
         setPendingReviews(await repo.getPendingReviews());
         setMenuItems(await repo.getMenuItems());
@@ -2383,15 +2457,16 @@
       setItemDesc(item.description || '');
       setItemCat(item.category || 'pizza');
       setItemImg(item.image || '/assets/hero_food_collage.png');
-      
-      if (item.prices) {
-        setItemPrice(item.prices.default || Object.values(item.prices)[0] || 550);
-        setPriceSmall(item.prices.small || 550);
-        setPriceRegular(item.prices.regular || 1150);
-        setPriceLarge(item.prices.large || 1600);
-        setPriceXlarge(item.prices.xlarge || 2250);
+
+      if (item.category === 'pizza' || item.category === 'special_pizza') {
+        const prices = item.prices || {};
+        setPriceSmall(prices.small || 550);
+        setPriceRegular(prices.regular || 1150);
+        setPriceLarge(prices.large || 1600);
+        setPriceXlarge(prices.xlarge || 2250);
       } else {
-        setItemPrice(550);
+        const prices = item.prices || {};
+        setItemPrice(prices.default || 0);
       }
     };
 
@@ -2400,8 +2475,13 @@
       setItemId('');
       setItemName('');
       setItemDesc('');
-      setItemPrice(550);
+      setItemCat('pizza');
       setItemImg('/assets/hero_food_collage.png');
+      setItemPrice(550);
+      setPriceSmall(550);
+      setPriceRegular(1150);
+      setPriceLarge(1600);
+      setPriceXlarge(2250);
     };
 
     const handleSaveMenuItem = (e) => {
@@ -3015,14 +3095,15 @@
             onClick: async () => {
               const next = !seasonalThemeInput;
               setSeasonalThemeInput(next);
-              if (repo.saveSeasonalTheme) {
-                await repo.saveSeasonalTheme(next);
-              } else {
+              try {
                 const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
                 const parsed = JSON.parse(raw);
                 parsed.seasonal_theme_enabled = next;
                 localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
                 window.dispatchEvent(new Event('storage_changed'));
+              } catch (e) {}
+              if (repo.saveSeasonalTheme) {
+                await repo.saveSeasonalTheme(next);
               }
             },
             style: {
@@ -3150,6 +3231,7 @@
           onClick: async () => {
             const discPayload = { enabled: discEnabled, type: discType, value: parseFloat(discValue)||0, targetType: discTarget, targetCategory: discCategory, targetItemId: discItemId, label: discLabel };
             await repo.saveDiscountSettings(discPayload);
+            // Re-read from Supabase to confirm saved values
             const disc = await repo.getDiscountSettings();
             setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
             setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
@@ -3548,404 +3630,404 @@
             },
               React.createElement('svg', { width: '19', height: '19', viewBox: '0 0 24 24', fill: '#fff' },
                 React.createElement('path', { d: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z' })
-            ),
-            'Send via WhatsApp'
+              ),
+              'Send via WhatsApp'
+            )
           )
-        )
-      ),
+        ),
 
-      // CARD 2 — Get In Touch
-      React.createElement('div', { style: cardStyle },
-        React.createElement('h2', { style: { color: '#fff', marginTop: 0, marginBottom: '5px', fontSize: '1.1rem' } }, '📞 Get In Touch'),
-        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Have questions or need help with your order? Reach us through any channel below.'),
-        [
-          { icon: '📍', label: 'Address', value: 'Main Boulevard, Qila Didar Singh, Gujranwala, Punjab, Pakistan.' },
-          { icon: '📞', label: 'Phone', value: '0302-4411700' },
-          { icon: '🕐', label: 'Hours', value: '12:00 PM – 2:00 AM (Daily)' },
-          { icon: '📧', label: 'Email', value: 'habibibites@gmail.com' }
-        ].map(item =>
-          React.createElement('div', { key: item.label, style: { display: 'flex', gap: '11px', marginBottom: '12px', alignItems: 'flex-start', padding: '11px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.07)' } },
-            React.createElement('span', { style: { fontSize: '1.15rem', flexShrink: 0, marginTop: '1px' } }, item.icon),
+        // CARD 2 — Get In Touch
+        React.createElement('div', { style: cardStyle },
+          React.createElement('h2', { style: { color: '#fff', marginTop: 0, marginBottom: '5px', fontSize: '1.1rem' } }, '📞 Get In Touch'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Have questions or need help with your order? Reach us through any channel below.'),
+          [
+            { icon: '📍', label: 'Address', value: 'Main Boulevard, Qila Didar Singh, Gujranwala, Punjab, Pakistan.' },
+            { icon: '📞', label: 'Phone', value: '0302-4411700' },
+            { icon: '🕐', label: 'Hours', value: '12:00 PM – 2:00 AM (Daily)' },
+            { icon: '📧', label: 'Email', value: 'habibibites@gmail.com' }
+          ].map(item =>
+            React.createElement('div', { key: item.label, style: { display: 'flex', gap: '11px', marginBottom: '12px', alignItems: 'flex-start', padding: '11px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.07)' } },
+              React.createElement('span', { style: { fontSize: '1.15rem', flexShrink: 0, marginTop: '1px' } }, item.icon),
+              React.createElement('div', null,
+                React.createElement('div', { style: { fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px' } }, item.label),
+                React.createElement('div', { style: { color: '#fff', fontSize: '0.87rem', lineHeight: '1.5' } }, item.value)
+              )
+            )
+          )
+        ),
+
+        // CARD 3 — Follow Us
+        React.createElement('div', { style: cardStyle },
+          React.createElement('h2', { style: { color: '#fff', marginTop: 0, marginBottom: '5px', fontSize: '1.1rem' } }, '🌐 Follow Us'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Stay connected for the latest deals, menu drops, and behind-the-scenes content.'),
+
+          // Instagram
+          React.createElement('a', {
+            href: 'https://www.instagram.com/habibi_bites_qds?igsh=ZDEyNDFqY2JhMmIx', target: '_blank', rel: 'noopener noreferrer',
+            style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', textDecoration: 'none', marginBottom: '12px', boxShadow: '0 3px 14px rgba(220,39,67,0.3)' }
+          },
+            React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
+              React.createElement('path', { d: 'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z' })
+            ),
             React.createElement('div', null,
-              React.createElement('div', { style: { fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px' } }, item.label),
-              React.createElement('div', { style: { color: '#fff', fontSize: '0.87rem', lineHeight: '1.5' } }, item.value)
+              React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'Instagram'),
+              React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, '@habibi_bites_qds')
+            )
+          ),
+
+          // Facebook
+          React.createElement('a', {
+            href: 'https://www.facebook.com/share/195qQ7gAJp/', target: '_blank', rel: 'noopener noreferrer',
+            style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: '#1877f2', color: '#fff', textDecoration: 'none', marginBottom: '12px', boxShadow: '0 3px 14px rgba(24,119,242,0.3)' }
+          },
+            React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
+              React.createElement('path', { d: 'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z' })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'Facebook'),
+              React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, 'Habibi Bites')
+            )
+          ),
+
+          // TikTok
+          React.createElement('a', {
+            href: 'https://www.tiktok.com/@habibi_qila?_r=1&_t=ZS-98gtpRf8j8q', target: '_blank', rel: 'noopener noreferrer',
+            style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: '#010101', border: '1px solid rgba(255,255,255,0.13)', color: '#fff', textDecoration: 'none', marginBottom: '0', boxShadow: '0 3px 14px rgba(0,0,0,0.4)' }
+          },
+            React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
+              React.createElement('path', { d: 'M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.32 6.32 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.02-.05z' })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'TikTok'),
+              React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, '@habibi_qila')
             )
           )
         )
       ),
 
-      // CARD 3 — Follow Us
-      React.createElement('div', { style: cardStyle },
-        React.createElement('h2', { style: { color: '#fff', marginTop: 0, marginBottom: '5px', fontSize: '1.1rem' } }, '🌐 Follow Us'),
-        React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: '18px' } }, 'Stay connected for the latest deals, menu drops, and behind-the-scenes content.'),
-
-        // Instagram
-        React.createElement('a', {
-          href: 'https://www.instagram.com/habibi_bites_qds?igsh=ZDEyNDFqY2JhMmIx', target: '_blank', rel: 'noopener noreferrer',
-          style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', textDecoration: 'none', marginBottom: '12px', boxShadow: '0 3px 14px rgba(220,39,67,0.3)' }
-        },
-          React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
-            React.createElement('path', { d: 'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z' })
+      // ── ROW 2: Google Maps Full Width ─────────────────────────────────────
+      React.createElement('div', { style: { marginTop: '26px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' } },
+        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '13px 20px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)' } },
+          React.createElement('span', { style: { fontSize: '1.1rem' } }, '📍'),
+                React.createElement('span', { style: { fontWeight: '700', fontSize: '0.98rem' } }, 'Find Us on Google Maps'),
+          React.createElement('span', { style: { color: 'var(--text-muted)', fontSize: '0.8rem' } }, '— Qila Didar Singh, Gujranwala'),
+          React.createElement('a', {
+            href: 'https://maps.google.com/?q=Qila+Didar+Singh+Gujranwala+Pakistan',
+            target: '_blank', rel: 'noopener noreferrer',
+            style: { marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: '700', padding: '5px 12px', border: '1px solid var(--accent)', borderRadius: '6px' }
+          }, 'Open Full Map ↗')
         ),
-        React.createElement('div', null,
-          React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'Instagram'),
-          React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, '@habibi_bites_qds')
-        )
-      ),
-
-      // Facebook
-      React.createElement('a', {
-        href: 'https://www.facebook.com/share/195qQ7gAJp/', target: '_blank', rel: 'noopener noreferrer',
-        style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: '#1877f2', color: '#fff', textDecoration: 'none', marginBottom: '12px', boxShadow: '0 3px 14px rgba(24,119,242,0.3)' }
-      },
-        React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
-          React.createElement('path', { d: 'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z' })
-        ),
-        React.createElement('div', null,
-          React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'Facebook'),
-          React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, 'Habibi Bites')
-        )
-      ),
-
-      // TikTok
-      React.createElement('a', {
-        href: 'https://www.tiktok.com/@habibi_qila?_r=1&_t=ZS-98gtpRf8j8q', target: '_blank', rel: 'noopener noreferrer',
-        style: { display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 15px', borderRadius: '10px', background: '#010101', border: '1px solid rgba(255,255,255,0.13)', color: '#fff', textDecoration: 'none', marginBottom: '0', boxShadow: '0 3px 14px rgba(0,0,0,0.4)' }
-      },
-        React.createElement('svg', { width: '21', height: '21', viewBox: '0 0 24 24', fill: 'currentColor', style: { flexShrink: 0 } },
-          React.createElement('path', { d: 'M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.32 6.32 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.02-.05z' })
-        ),
-        React.createElement('div', null,
-          React.createElement('div', { style: { fontWeight: '700', fontSize: '0.9rem' } }, 'TikTok'),
-          React.createElement('div', { style: { fontSize: '0.74rem', opacity: 0.85 } }, '@habibi_qila')
-        )
+        React.createElement('iframe', {
+          title: 'Habibi Bites Location — Qila Didar Singh, Gujranwala',
+          src: 'https://maps.google.com/maps?q=Qila+Didar+Singh,+Gujranwala,+Pakistan&t=&z=14&ie=UTF8&iwloc=&output=embed',
+          width: '100%',
+          height: '380',
+          style: { border: 0, display: 'block' },
+          allowFullScreen: true,
+          loading: 'lazy',
+          referrerPolicy: 'no-referrer-when-downgrade'
+        })
       )
-    )
-  ),
-
-  // ── ROW 2: Google Maps Full Width ─────────────────────────────────────
-  React.createElement('div', { style: { marginTop: '26px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' } },
-    React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '13px 20px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border)' } },
-      React.createElement('span', { style: { fontSize: '1.1rem' } }, '📍'),
-      React.createElement('span', { style: { fontWeight: '700', fontSize: '0.98rem' } }, 'Find Us on Google Maps'),
-      React.createElement('span', { style: { color: 'var(--text-muted)', fontSize: '0.8rem' } }, '— Qila Didar Singh, Gujranwala'),
-      React.createElement('a', {
-        href: 'https://maps.google.com/?q=Qila+Didar+Singh+Gujranwala+Pakistan',
-        target: '_blank', rel: 'noopener noreferrer',
-        style: { marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: '700', padding: '5px 12px', border: '1px solid var(--accent)', borderRadius: '6px' }
-      }, 'Open Full Map ↗')
-    ),
-    React.createElement('iframe', {
-      title: 'Habibi Bites Location — Qila Didar Singh, Gujranwala',
-      src: 'https://maps.google.com/maps?q=Qila+Didar+Singh,+Gujranwala,+Pakistan&t=&z=14&ie=UTF8&iwloc=&output=embed',
-      width: '100%',
-      height: '380',
-      style: { border: 0, display: 'block' },
-      allowFullScreen: true,
-      loading: 'lazy',
-      referrerPolicy: 'no-referrer-when-downgrade'
-    })
-  )
-);
-}
-
-// --- HELPER CARD & MODAL COMPONENTS ---
-
-function FoodCardComponent({ item, addToCart, onCustomize, discountRule }) {
-  let rawPrice = item.prices ? (Object.keys(item.prices).length === 1 ? Object.values(item.prices)[0] : Math.min(...Object.values(item.prices))) : 0;
-  let hasMultiple = item.prices && Object.keys(item.prices).length > 1;
-
-  let discountAmount = 0;
-  if (discountRule && discountRule.enabled && rawPrice > 0) {
-    if (discountRule.targetType === 'all' ||
-       (discountRule.targetType === 'category' && discountRule.targetCategory === item.category) ||
-       (discountRule.targetType === 'item' && String(discountRule.targetItemId) === String(item.id))) {
-      const val = parseFloat(discountRule.value) || 0;
-      discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
-    }
-  }
-  const finalPrice = Math.max(0, rawPrice - discountAmount);
-
-  let priceDisplay = "";
-  if (hasMultiple) {
-    priceDisplay = `From Rs. ${finalPrice.toLocaleString()}`;
-  } else if (discountAmount > 0) {
-    priceDisplay = React.createElement('span', null,
-      React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginRight: '6px' } }, `Rs. ${rawPrice}`),
-      React.createElement('span', { style: { color: '#4ade80', fontWeight: 'bold' } }, `Rs. ${finalPrice}`)
     );
-  } else {
-    priceDisplay = `Rs. ${rawPrice}`;
   }
 
-  return React.createElement('div', { className: 'menu-item-row', id: `item-${item.id}` },
-    React.createElement('img', {
-      src: item.image || '/assets/hero_food_collage.png',
-      className: 'menu-item-img',
-      alt: item.name,
-      loading: 'lazy',
-      decoding: 'async',
-      onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
-    }),
-    React.createElement('div', { className: 'menu-item-info' },
-      React.createElement('h3', null, item.name),
-      React.createElement('p', { className: 'menu-item-description' }, item.description)
-    ),
-    React.createElement('div', { className: 'menu-item-cta' },
-      React.createElement('div', { className: 'menu-item-main-price', style: { fontWeight: 'bold', color: 'var(--accent)' } }, priceDisplay),
-      React.createElement('button', {
-        className: 'btn btn-primary',
-        onClick: () => (hasMultiple || item.category === 'pizza' || item.category === 'special_pizza') ? onCustomize(item) : addToCart({ id: item.id, name: item.name, price: finalPrice })
-      }, hasMultiple ? "Choose Options" : "Add to Basket")
-    )
-  );
-}
+  // --- HELPER CARD & MODAL COMPONENTS ---
 
-function DealCardComponent({ deal, addToCart, discountRule }) {
-  let rawPrice = deal.price || 0;
-  let discountAmount = 0;
-  if (discountRule && discountRule.enabled && rawPrice > 0 && discountRule.targetType === 'all') {
-    const val = parseFloat(discountRule.value) || 0;
-    discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
-  }
-  const finalPrice = Math.max(0, rawPrice - discountAmount);
+  function FoodCardComponent({ item, addToCart, onCustomize, discountRule }) {
+    let rawPrice = item.prices ? (Object.keys(item.prices).length === 1 ? Object.values(item.prices)[0] : Math.min(...Object.values(item.prices))) : 0;
+    let hasMultiple = item.prices && Object.keys(item.prices).length > 1;
 
-  return React.createElement('div', { className: 'deal-card', id: `deal-${deal.id}` },
-    deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
-    React.createElement('div', { className: 'deal-card-image-box' },
+    let discountAmount = 0;
+    if (discountRule && discountRule.enabled && rawPrice > 0) {
+      if (discountRule.targetType === 'all' ||
+         (discountRule.targetType === 'category' && discountRule.targetCategory === item.category) ||
+         (discountRule.targetType === 'item' && String(discountRule.targetItemId) === String(item.id))) {
+        const val = parseFloat(discountRule.value) || 0;
+        discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
+      }
+    }
+    const finalPrice = Math.max(0, rawPrice - discountAmount);
+
+    let priceDisplay = "";
+    if (hasMultiple) {
+      priceDisplay = `From Rs. ${finalPrice.toLocaleString()}`;
+    } else if (discountAmount > 0) {
+      priceDisplay = React.createElement('span', null,
+        React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginRight: '6px' } }, `Rs. ${rawPrice}`),
+        React.createElement('span', { style: { color: '#4ade80', fontWeight: 'bold' } }, `Rs. ${finalPrice}`)
+      );
+    } else {
+      priceDisplay = `Rs. ${rawPrice}`;
+    }
+
+    return React.createElement('div', { className: 'menu-item-row', id: `item-${item.id}` },
       React.createElement('img', {
-        src: deal.image || '/assets/hero_food_collage.png',
-        alt: deal.name,
+        src: item.image || '/assets/hero_food_collage.png',
+        className: 'menu-item-img',
+        alt: item.name,
         loading: 'lazy',
         decoding: 'async',
         onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
       }),
-      React.createElement('div', { className: 'deal-flyer-glow-ribbon' })
-    ),
-    React.createElement('div', { className: 'deal-card-body' },
-      React.createElement('h3', { className: 'deal-card-title' }, deal.name),
-      React.createElement('p', { className: 'deal-card-contents' }, deal.description || deal.contents || ''),
-      React.createElement('div', { className: 'deal-card-footer' },
-        discountAmount > 0 ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
-          React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem' } }, `Rs. ${rawPrice}`),
-          React.createElement('span', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: '#4ade80' } }, `Rs. ${finalPrice.toLocaleString()}`)
-        ) : React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${rawPrice.toLocaleString()}`),
+      React.createElement('div', { className: 'menu-item-info' },
+        React.createElement('h3', null, item.name),
+        React.createElement('p', { className: 'menu-item-description' }, item.description)
+      ),
+      React.createElement('div', { className: 'menu-item-cta' },
+        React.createElement('div', { className: 'menu-item-main-price', style: { fontWeight: 'bold', color: 'var(--accent)' } }, priceDisplay),
         React.createElement('button', {
           className: 'btn btn-primary',
-          onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: finalPrice })
-        }, 'Add to Basket +')
+          onClick: () => (hasMultiple || item.category === 'pizza' || item.category === 'special_pizza') ? onCustomize(item) : addToCart({ id: item.id, name: item.name, price: finalPrice })
+        }, hasMultiple ? "Choose Options" : "Add to Basket")
       )
-    )
-  );
-}
+    );
+  }
 
-function CartDrawerModal({ cart, cartSubtotal, updateQuantity, removeFromCart, onClose, setActivePage }) {
-return React.createElement('div', { className: 'cart-drawer-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'flex-end' } },
-  React.createElement('div', { className: 'cart-drawer active', style: { width: '100%', maxWidth: '420px', background: 'var(--bg-dark)', height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border)', right: 0 } },
-    React.createElement('div', { style: { padding: '20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-      React.createElement('h3', { style: { margin: 0 } }, `Your Basket (${cart.length})`),
-      React.createElement('button', { onClick: onClose, style: { background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' } }, '×')
-    ),
-    React.createElement('div', { style: { flex: 1, overflowY: 'auto', padding: '20px' } },
-      cart.length === 0 ? React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' } },
-        React.createElement('div', { style: { fontSize: '3rem' } }, '🛒'),
-        React.createElement('p', null, 'Your basket is empty.'),
-        React.createElement('button', { className: 'btn btn-primary', onClick: () => { onClose(); setActivePage('menu'); } }, 'Browse Menu')
-      ) : cart.map((item, idx) => React.createElement('div', { key: idx, style: { padding: '12px', background: 'var(--bg-panel)', marginBottom: '10px', borderRadius: '4px', border: '1px solid var(--border-light)' } },
-        React.createElement('strong', null, item.name),
-        React.createElement('div', { style: { color: 'var(--primary)', fontWeight: 'bold' } }, `Rs. ${item.price}`),
-        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' } },
-          React.createElement('div', null,
-            React.createElement('button', { onClick: () => updateQuantity(idx, item.quantity - 1), style: { padding: '2px 8px' } }, '-'),
-            React.createElement('span', { style: { padding: '0 8px' } }, item.quantity),
-            React.createElement('button', { onClick: () => updateQuantity(idx, item.quantity + 1), style: { padding: '2px 8px' } }, '+')
-          ),
-          React.createElement('button', { onClick: () => removeFromCart(idx), style: { background: 'none', border: 'none', cursor: 'pointer' } }, '🗑️')
-        )
-      ))
-    ),
-    cart.length > 0 ? React.createElement('div', { style: { padding: '20px', borderTop: '1px solid var(--border)', background: 'var(--bg-panel)' } },
-      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '15px' } },
-        React.createElement('span', null, 'Subtotal:'),
-        React.createElement('span', { style: { color: 'var(--accent)' } }, `Rs. ${cartSubtotal.toLocaleString()}`)
+  function DealCardComponent({ deal, addToCart, discountRule }) {
+    let rawPrice = deal.price || 0;
+    let discountAmount = 0;
+    if (discountRule && discountRule.enabled && rawPrice > 0 && discountRule.targetType === 'all') {
+      const val = parseFloat(discountRule.value) || 0;
+      discountAmount = discountRule.type === 'percentage' ? Math.round(rawPrice * val / 100) : Math.min(rawPrice, val);
+    }
+    const finalPrice = Math.max(0, rawPrice - discountAmount);
+
+    return React.createElement('div', { className: 'deal-card', id: `deal-${deal.id}` },
+      deal.tag ? React.createElement('div', { className: 'deal-card-badge' }, deal.tag) : null,
+      React.createElement('div', { className: 'deal-card-image-box' },
+        React.createElement('img', {
+          src: deal.image || '/assets/hero_food_collage.png',
+          alt: deal.name,
+          loading: 'lazy',
+          decoding: 'async',
+          onError: (e) => { e.target.onerror = null; e.target.src = '/assets/hero_food_collage.png'; }
+        }),
+        React.createElement('div', { className: 'deal-flyer-glow-ribbon' })
       ),
-      React.createElement('button', { className: 'btn btn-primary', style: { width: '100%', padding: '14px', justifyContent: 'center' }, onClick: () => { onClose(); setActivePage('checkout'); } }, 'Proceed to Checkout ➔')
-    ) : null
-  )
-);
-}
-
-function CustomizationModalView({ item, onClose, addToCart }) {
-const availableSizes = item?.prices ? Object.keys(item.prices) : ['default'];
-const [size, setSize] = useState(availableSizes[0] || 'small');
-const [crust, setCrust] = useState({ id: 'normal', name: 'Standard Crust', price: 0 });
-const [selectedAddons, setSelectedAddons] = useState([]);
-const [qty, setQty] = useState(1);
-
-const crusts = [
-  { id: 'normal', name: 'Standard Pan Crust', price: 0 }
-];
-
-const availableAddons = window.HABIBI_MENU?.addons || [
-  { id: "garlic_mayo", name: "Garlic Mayo Dip Sauce", price: 80 },
-  { id: "habibi_special_sauce", name: "Habibi Special Spicy Sauce", price: 100 },
-  { id: "extra_cheese", name: "Extra Cheese Slice", price: 60 },
-  { id: "extra_patty", name: "Extra Chicken Patty", price: 150 },
-  { id: "mushrooms_olives", name: "Extra Mushrooms & Olives", price: 120 }
-];
-
-const basePrice = item.prices ? (item.prices[size] || Object.values(item.prices)[0] || 0) : 0;
-const addonsTotal = selectedAddons.reduce((acc, a) => acc + a.price, 0);
-const unitPrice = basePrice + crust.price + addonsTotal;
-const grandTotal = unitPrice * qty;
-
-const toggleAddon = (addon) => {
-  setSelectedAddons(prev => {
-    const exists = prev.some(a => a.id === addon.id);
-    if (exists) return prev.filter(a => a.id !== addon.id);
-    return [...prev, addon];
-  });
-};
-
-return React.createElement('div', { className: 'modal-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px' } },
-  React.createElement('div', { className: 'custom-modal', style: { width: '100%', maxWidth: '520px', background: 'var(--bg-dark)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' } },
-    React.createElement('div', { style: { padding: '16px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-panel)' } },
-      React.createElement('h3', { style: { margin: 0 } }, `Customize ${item.name}`),
-      React.createElement('button', { onClick: onClose, style: { background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' } }, '×')
-    ),
-    React.createElement('div', { style: { padding: '20px', maxHeight: '65vh', overflowY: 'auto' } },
-      availableSizes.length > 1 ? React.createElement('div', { style: { marginBottom: '20px' } },
-        React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '1. Select Pizza Size:'),
-        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px' } },
-          availableSizes.map(s => React.createElement('button', {
-            key: s,
-            type: 'button',
-            onClick: () => setSize(s),
-            style: { padding: '10px', borderRadius: '4px', border: size === s ? '2px solid var(--primary)' : '1px solid var(--border)', background: size === s ? 'var(--primary-glow)' : 'var(--bg-panel)', color: '#fff', cursor: 'pointer', textTransform: 'uppercase' }
-          }, `${s}`, React.createElement('br'), React.createElement('span', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, `Rs. ${item.prices[s]}`)))
+      React.createElement('div', { className: 'deal-card-body' },
+        React.createElement('h3', { className: 'deal-card-title' }, deal.name),
+        React.createElement('p', { className: 'deal-card-contents' }, deal.description || deal.contents || ''),
+        React.createElement('div', { className: 'deal-card-footer' },
+          discountAmount > 0 ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+            React.createElement('s', { style: { color: 'var(--text-muted)', fontSize: '0.85rem' } }, `Rs. ${rawPrice}`),
+            React.createElement('span', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: '#4ade80' } }, `Rs. ${finalPrice.toLocaleString()}`)
+          ) : React.createElement('div', { style: { fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${rawPrice.toLocaleString()}`),
+          React.createElement('button', {
+            className: 'btn btn-primary',
+            onClick: () => addToCart({ id: `deal_${deal.id}`, name: deal.name, price: finalPrice })
+          }, 'Add to Basket +')
         )
-      ) : null,
-      ((item.category === 'pizza' || item.category === 'special_pizza') && crusts.length > 1) ? React.createElement('div', { style: { marginBottom: '20px' } },
-        React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '2. Select Stuffed Crust Option:'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-          crusts.map(c => React.createElement('label', {
-            key: c.id,
-            style: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '4px', background: crust.id === c.id ? 'var(--primary-glow)' : 'var(--bg-panel)', border: crust.id === c.id ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }
-          },
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-              React.createElement('input', { type: 'radio', name: 'crust', checked: crust.id === c.id, onChange: () => setCrust(c) }),
-              React.createElement('span', null, c.name)
-            ),
-            React.createElement('span', { style: { color: 'var(--accent)', fontWeight: 'bold' } }, c.price > 0 ? `+ Rs. ${c.price}` : 'Free')
-          ))
-        )
-      ) : null,
-      React.createElement('div', { style: { marginBottom: '20px' } },
-        React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '3. Extra Sauces & Dip Addons:'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-          availableAddons.map(addon => {
-            const isSelected = selectedAddons.some(a => a.id === addon.id);
-            return React.createElement('label', {
-              key: addon.id,
-              style: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '4px', background: isSelected ? 'var(--primary-glow)' : 'var(--bg-panel)', border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }
-            },
-              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-                React.createElement('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleAddon(addon) }),
-                React.createElement('span', null, addon.name)
+      )
+    );
+  }
+
+  function CartDrawerModal({ cart, cartSubtotal, updateQuantity, removeFromCart, onClose, setActivePage }) {
+    return React.createElement('div', { className: 'cart-drawer-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'flex-end' } },
+      React.createElement('div', { className: 'cart-drawer active', style: { width: '100%', maxWidth: '420px', background: 'var(--bg-dark)', height: '100%', display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border)', right: 0 } },
+        React.createElement('div', { style: { padding: '20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+          React.createElement('h3', { style: { margin: 0 } }, `Your Basket (${cart.length})`),
+          React.createElement('button', { onClick: onClose, style: { background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' } }, '×')
+        ),
+        React.createElement('div', { style: { flex: 1, overflowY: 'auto', padding: '20px' } },
+          cart.length === 0 ? React.createElement('div', { style: { textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' } },
+            React.createElement('div', { style: { fontSize: '3rem' } }, '🛒'),
+            React.createElement('p', null, 'Your basket is empty.'),
+            React.createElement('button', { className: 'btn btn-primary', onClick: () => { onClose(); setActivePage('menu'); } }, 'Browse Menu')
+          ) : cart.map((item, idx) => React.createElement('div', { key: idx, style: { padding: '12px', background: 'var(--bg-panel)', marginBottom: '10px', borderRadius: '4px', border: '1px solid var(--border-light)' } },
+            React.createElement('strong', null, item.name),
+            React.createElement('div', { style: { color: 'var(--primary)', fontWeight: 'bold' } }, `Rs. ${item.price}`),
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' } },
+              React.createElement('div', null,
+                React.createElement('button', { onClick: () => updateQuantity(idx, item.quantity - 1), style: { padding: '2px 8px' } }, '-'),
+                React.createElement('span', { style: { padding: '0 8px' } }, item.quantity),
+                React.createElement('button', { onClick: () => updateQuantity(idx, item.quantity + 1), style: { padding: '2px 8px' } }, '+')
               ),
-              React.createElement('span', { style: { color: 'var(--accent)', fontWeight: 'bold' } }, `+ Rs. ${addon.price}`)
-            );
-          })
+              React.createElement('button', { onClick: () => removeFromCart(idx), style: { background: 'none', border: 'none', cursor: 'pointer' } }, '🗑️')
+            )
+          ))
+        ),
+        cart.length > 0 ? React.createElement('div', { style: { padding: '20px', borderTop: '1px solid var(--border)', background: 'var(--bg-panel)' } },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '15px' } },
+            React.createElement('span', null, 'Subtotal:'),
+            React.createElement('span', { style: { color: 'var(--accent)' } }, `Rs. ${cartSubtotal.toLocaleString()}`)
+          ),
+          React.createElement('button', { className: 'btn btn-primary', style: { width: '100%', padding: '14px', justifyContent: 'center' }, onClick: () => { onClose(); setActivePage('checkout'); } }, 'Proceed to Checkout ➔')
+        ) : null
+      )
+    );
+  }
+
+  function CustomizationModalView({ item, onClose, addToCart }) {
+    const availableSizes = item?.prices ? Object.keys(item.prices) : ['default'];
+    const [size, setSize] = useState(availableSizes[0] || 'small');
+    const [crust, setCrust] = useState({ id: 'normal', name: 'Standard Crust', price: 0 });
+    const [selectedAddons, setSelectedAddons] = useState([]);
+    const [qty, setQty] = useState(1);
+
+    const crusts = [
+      { id: 'normal', name: 'Standard Pan Crust', price: 0 }
+    ];
+
+    const availableAddons = window.HABIBI_MENU?.addons || [
+      { id: "garlic_mayo", name: "Garlic Mayo Dip Sauce", price: 80 },
+      { id: "habibi_special_sauce", name: "Habibi Special Spicy Sauce", price: 100 },
+      { id: "extra_cheese", name: "Extra Cheese Slice", price: 60 },
+      { id: "extra_patty", name: "Extra Chicken Patty", price: 150 },
+      { id: "mushrooms_olives", name: "Extra Mushrooms & Olives", price: 120 }
+    ];
+
+    const basePrice = item.prices ? (item.prices[size] || Object.values(item.prices)[0] || 0) : 0;
+    const addonsTotal = selectedAddons.reduce((acc, a) => acc + a.price, 0);
+    const unitPrice = basePrice + crust.price + addonsTotal;
+    const grandTotal = unitPrice * qty;
+
+    const toggleAddon = (addon) => {
+      setSelectedAddons(prev => {
+        const exists = prev.some(a => a.id === addon.id);
+        if (exists) return prev.filter(a => a.id !== addon.id);
+        return [...prev, addon];
+      });
+    };
+
+    return React.createElement('div', { className: 'modal-overlay active', style: { position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px' } },
+      React.createElement('div', { className: 'custom-modal', style: { width: '100%', maxWidth: '520px', background: 'var(--bg-dark)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' } },
+        React.createElement('div', { style: { padding: '16px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-panel)' } },
+          React.createElement('h3', { style: { margin: 0 } }, `Customize ${item.name}`),
+          React.createElement('button', { onClick: onClose, style: { background: 'none', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: 'pointer' } }, '×')
+        ),
+        React.createElement('div', { style: { padding: '20px', maxHeight: '65vh', overflowY: 'auto' } },
+          availableSizes.length > 1 ? React.createElement('div', { style: { marginBottom: '20px' } },
+            React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '1. Select Pizza Size:'),
+            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px' } },
+              availableSizes.map(s => React.createElement('button', {
+                key: s,
+                type: 'button',
+                onClick: () => setSize(s),
+                style: { padding: '10px', borderRadius: '4px', border: size === s ? '2px solid var(--primary)' : '1px solid var(--border)', background: size === s ? 'var(--primary-glow)' : 'var(--bg-panel)', color: '#fff', cursor: 'pointer', textTransform: 'uppercase' }
+              }, `${s}`, React.createElement('br'), React.createElement('span', { style: { fontSize: '0.8rem', color: 'var(--text-muted)' } }, `Rs. ${item.prices[s]}`)))
+            )
+          ) : null,
+          ((item.category === 'pizza' || item.category === 'special_pizza') && crusts.length > 1) ? React.createElement('div', { style: { marginBottom: '20px' } },
+            React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '2. Select Stuffed Crust Option:'),
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+              crusts.map(c => React.createElement('label', {
+                key: c.id,
+                style: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '4px', background: crust.id === c.id ? 'var(--primary-glow)' : 'var(--bg-panel)', border: crust.id === c.id ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }
+              },
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                  React.createElement('input', { type: 'radio', name: 'crust', checked: crust.id === c.id, onChange: () => setCrust(c) }),
+                  React.createElement('span', null, c.name)
+                ),
+                React.createElement('span', { style: { color: 'var(--accent)', fontWeight: 'bold' } }, c.price > 0 ? `+ Rs. ${c.price}` : 'Free')
+              ))
+            )
+          ) : null,
+          React.createElement('div', { style: { marginBottom: '20px' } },
+            React.createElement('label', { style: { display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' } }, '3. Extra Sauces & Dip Addons:'),
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+              availableAddons.map(addon => {
+                const isSelected = selectedAddons.some(a => a.id === addon.id);
+                return React.createElement('label', {
+                  key: addon.id,
+                  style: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '4px', background: isSelected ? 'var(--primary-glow)' : 'var(--bg-panel)', border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }
+                },
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    React.createElement('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleAddon(addon) }),
+                    React.createElement('span', null, addon.name)
+                  ),
+                  React.createElement('span', { style: { color: 'var(--accent)', fontWeight: 'bold' } }, `+ Rs. ${addon.price}`)
+                );
+              })
+            )
+          ),
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
+            React.createElement('span', { style: { fontWeight: 'bold' } }, 'Quantity:'),
+            React.createElement('div', { style: { display: 'inline-flex', alignItems: 'center', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: '4px' } },
+              React.createElement('button', { onClick: () => setQty(Math.max(1, qty - 1)), style: { padding: '6px 14px', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' } }, '-'),
+              React.createElement('span', { style: { padding: '0 12px', fontWeight: 'bold' } }, qty),
+              React.createElement('button', { onClick: () => setQty(qty + 1), style: { padding: '6px 14px', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' } }, '+')
+            )
+          )
+        ),
+        React.createElement('div', { style: { padding: '16px 20px', borderTop: '1px solid var(--border-light)', background: 'var(--bg-panel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+          React.createElement('div', null,
+            React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-muted)' } }, 'Net Item Total'),
+            React.createElement('div', { style: { fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${grandTotal.toLocaleString()}`)
+          ),
+          React.createElement('button', {
+            className: 'btn btn-primary',
+            onClick: () => {
+              addToCart({
+                id: item.id,
+                name: item.name,
+                price: unitPrice,
+                quantity: qty,
+                options: { size, crust: crust.id !== 'normal' ? crust : null, addons: selectedAddons }
+              });
+              onClose();
+            }
+          }, 'Add to Basket')
+        )
+      )
+    );
+  }
+
+  function FooterView({ setActivePage }) {
+    return React.createElement('footer', { id: 'global-footer' },
+      React.createElement('div', { className: 'footer-grid' },
+        React.createElement('div', { className: 'footer-col brand-col' },
+          React.createElement('h3', { className: 'footer-logo' }, React.createElement('span', { style: { color: 'var(--primary)' } }, 'Fiery '), 'Habibi Bites'),
+          React.createElement('p', { className: 'footer-desc' }, 'Serving premium fast food, authentic Pakistani handi and karahis, gourmet pizzas, crispy broasts, and cooling shakes in Gujranwala.')
+        ),
+        React.createElement('div', { className: 'footer-col' },
+          React.createElement('h4', null, 'Working Hours'),
+          React.createElement('ul', { className: 'footer-hours' },
+            React.createElement('li', null, React.createElement('span', null, 'Mon - Fri: '), React.createElement('span', null, '12:00 PM - 02:00 AM')),
+            React.createElement('li', null, React.createElement('span', null, 'Sat - Sun: '), React.createElement('span', null, '12:00 PM - 03:00 AM'))
+          )
+        ),
+        React.createElement('div', { className: 'footer-col' },
+          React.createElement('h4', null, 'Kitchen'),
+          React.createElement('ul', { className: 'footer-links' },
+            React.createElement('li', null, React.createElement('button', { onClick: () => setActivePage('menu'), style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' } }, 'Gourmet Pizzas')),
+            React.createElement('li', null, React.createElement('button', { onClick: () => setActivePage('deals'), style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' } }, 'Super Saver Deals'))
+          )
+        ),
+        React.createElement('div', { className: 'footer-col' },
+          React.createElement('h4', null, 'Find Us'),
+          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '10px' } }, 'Main Boulevard, Qila Didar Singh, Gujranwala, Punjab, Pakistan.'),
+          React.createElement('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
+            React.createElement('a', { href: 'https://www.facebook.com/share/195qQ7gAJp/', target: '_blank', rel: 'noopener noreferrer', title: 'Facebook', style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: '#1877f2', color: '#fff', textDecoration: 'none' } },
+              React.createElement('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'currentColor' }, React.createElement('path', { d: 'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z' }))
+            ),
+            React.createElement('a', { href: 'https://www.instagram.com/habibi_bites_qds?igsh=ZDEyNDFqY2JhMmIx', target: '_blank', rel: 'noopener noreferrer', title: 'Instagram', style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', textDecoration: 'none' } },
+              React.createElement('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'currentColor' }, React.createElement('path', { d: 'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z' }))
+            ),
+            React.createElement('a', { href: 'https://www.tiktok.com/@habibi_qila?_r=1&_t=ZS-98gtpRf8j8q', target: '_blank', rel: 'noopener noreferrer', title: 'TikTok', style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: '#000', border: '1px solid var(--border-light)', color: '#fff', textDecoration: 'none' } },
+              React.createElement('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'currentColor' }, React.createElement('path', { d: 'M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.32 6.32 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.02-.05z' }))
+            )
+          )
         )
       ),
-      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' } },
-        React.createElement('span', { style: { fontWeight: 'bold' } }, 'Quantity:'),
-        React.createElement('div', { style: { display: 'inline-flex', alignItems: 'center', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: '4px' } },
-          React.createElement('button', { onClick: () => setQty(Math.max(1, qty - 1)), style: { padding: '6px 14px', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' } }, '-'),
-          React.createElement('span', { style: { padding: '0 12px', fontWeight: 'bold' } }, qty),
-          React.createElement('button', { onClick: () => setQty(qty + 1), style: { padding: '6px 14px', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' } }, '+')
+      React.createElement('div', { className: 'footer-bottom', style: { textAlign: 'center', padding: '15px 0', borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)', fontSize: '0.85rem' } },
+        React.createElement('span', null,
+          '© Habibi Bites. All Rights Reserved. Developed by ',
+          React.createElement('a', {
+            href: 'https://muhammadhussnainakram.vercel.app/',
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            style: { color: 'var(--accent)', textDecoration: 'none', fontWeight: '600', transition: 'var(--transition)' },
+            onMouseEnter: e => e.target.style.textDecoration = 'underline',
+            onMouseLeave: e => e.target.style.textDecoration = 'none'
+          }, '@Nexbyte-Studio')
         )
       )
-    ),
-    React.createElement('div', { style: { padding: '16px 20px', borderTop: '1px solid var(--border-light)', background: 'var(--bg-panel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-      React.createElement('div', null,
-        React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-muted)' } }, 'Net Item Total'),
-        React.createElement('div', { style: { fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent)' } }, `Rs. ${grandTotal.toLocaleString()}`)
-      ),
-      React.createElement('button', {
-        className: 'btn btn-primary',
-        onClick: () => {
-          addToCart({
-            id: item.id,
-            name: item.name,
-            price: unitPrice,
-            quantity: qty,
-            options: { size, crust: crust.id !== 'normal' ? crust : null, addons: selectedAddons }
-          });
-          onClose();
-        }
-      }, 'Add to Basket')
-    )
-  )
-);
-}
+    );
+  }
 
-function FooterView({ setActivePage }) {
-return React.createElement('footer', { id: 'global-footer' },
-  React.createElement('div', { className: 'footer-grid' },
-    React.createElement('div', { className: 'footer-col brand-col' },
-      React.createElement('h3', { className: 'footer-logo' }, React.createElement('span', { style: { color: 'var(--primary)' } }, 'Fiery '), 'Habibi Bites'),
-      React.createElement('p', { className: 'footer-desc' }, 'Serving premium fast food, authentic Pakistani handi and karahis, gourmet pizzas, crispy broasts, and cooling shakes in Gujranwala.')
-    ),
-    React.createElement('div', { className: 'footer-col' },
-      React.createElement('h4', null, 'Working Hours'),
-      React.createElement('ul', { className: 'footer-hours' },
-        React.createElement('li', null, React.createElement('span', null, 'Mon - Fri: '), React.createElement('span', null, '12:00 PM - 02:00 AM')),
-        React.createElement('li', null, React.createElement('span', null, 'Sat - Sun: '), React.createElement('span', null, '12:00 PM - 03:00 AM'))
-      )
-    ),
-    React.createElement('div', { className: 'footer-col' },
-      React.createElement('h4', null, 'Kitchen'),
-      React.createElement('ul', { className: 'footer-links' },
-        React.createElement('li', null, React.createElement('button', { onClick: () => setActivePage('menu'), style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' } }, 'Gourmet Pizzas')),
-        React.createElement('li', null, React.createElement('button', { onClick: () => setActivePage('deals'), style: { background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' } }, 'Super Saver Deals'))
-      )
-    ),
-    React.createElement('div', { className: 'footer-col' },
-      React.createElement('h4', null, 'Find Us'),
-      React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '10px' } }, 'Main Boulevard, Qila Didar Singh, Gujranwala, Punjab, Pakistan.'),
-      React.createElement('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
-        React.createElement('a', { href: 'https://www.facebook.com/share/195qQ7gAJp/', target: '_blank', rel: 'noopener noreferrer', title: 'Facebook', style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: '#1877f2', color: '#fff', textDecoration: 'none' } },
-          React.createElement('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'currentColor' }, React.createElement('path', { d: 'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z' }))
-        ),
-        React.createElement('a', { href: 'https://www.instagram.com/habibi_bites_qds?igsh=ZDEyNDFqY2JhMmIx', target: '_blank', rel: 'noopener noreferrer', title: 'Instagram', style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', textDecoration: 'none' } },
-          React.createElement('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'currentColor' }, React.createElement('path', { d: 'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z' }))
-        ),
-        React.createElement('a', { href: 'https://www.tiktok.com/@habibi_qila?_r=1&_t=ZS-98gtpRf8j8q', target: '_blank', rel: 'noopener noreferrer', title: 'TikTok', style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%', background: '#000', border: '1px solid var(--border-light)', color: '#fff', textDecoration: 'none' } },
-          React.createElement('svg', { width: '14', height: '14', viewBox: '0 0 24 24', fill: 'currentColor' }, React.createElement('path', { d: 'M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.32 6.32 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.02-.05z' }))
-        )
-      )
-    )
-  ),
-  React.createElement('div', { className: 'footer-bottom', style: { textAlign: 'center', padding: '15px 0', borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)', fontSize: '0.85rem' } },
-    React.createElement('span', null,
-      '© Habibi Bites. All Rights Reserved. Developed by ',
-      React.createElement('a', {
-        href: 'https://muhammadhussnainakram.vercel.app/',
-        target: '_blank',
-        rel: 'noopener noreferrer',
-        style: { color: 'var(--accent)', textDecoration: 'none', fontWeight: '600', transition: 'var(--transition)' },
-        onMouseEnter: e => e.target.style.textDecoration = 'underline',
-        onMouseLeave: e => e.target.style.textDecoration = 'none'
-      }, '@Nexbyte-Studio')
-    )
-  )
-);
-}
-
-// Render to DOM
-const root = document.getElementById('root');
-if (root) {
-ReactDOM.createRoot(root).render(React.createElement(HabibiBitesFullApp));
-}
+  // Render to DOM
+  const root = document.getElementById('root');
+  if (root) {
+    ReactDOM.createRoot(root).render(React.createElement(HabibiBitesFullApp));
+  }
 })();

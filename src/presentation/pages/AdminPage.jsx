@@ -74,10 +74,10 @@ export const AdminPage = () => {
         isInitial && db.getSeasonalTheme ? db.getSeasonalTheme() : Promise.resolve(null)
       ]);
 
-      setOrders(fetchedOrders || []);
-      setPendingReviews(fetchedReviews || []);
-      setMenuItemsList(items || []);
-      setDealsList(fetchedDeals || []);
+      setOrders(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedOrders || []) ? (fetchedOrders || []) : prev));
+      setPendingReviews(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedReviews || []) ? (fetchedReviews || []) : prev));
+      setMenuItemsList(prev => (JSON.stringify(prev) !== JSON.stringify(items || []) ? (items || []) : prev));
+      setDealsList(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDeals || []) ? (fetchedDeals || []) : prev));
 
       if (isInitial) {
         if (s) {
@@ -694,14 +694,15 @@ export const AdminPage = () => {
             onClick={async () => {
               const next = !seasonalThemeState;
               setSeasonalThemeState(next);
-              if (db.saveSeasonalTheme) {
-                await db.saveSeasonalTheme(next);
-              } else {
+              try {
                 const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
                 const parsed = JSON.parse(raw);
                 parsed.seasonal_theme_enabled = next;
                 localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
                 window.dispatchEvent(new Event('storage_changed'));
+              } catch (e) {}
+              if (db.saveSeasonalTheme) {
+                await db.saveSeasonalTheme(next);
               }
             }}
             style={{ 
