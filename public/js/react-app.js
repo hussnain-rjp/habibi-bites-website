@@ -1118,16 +1118,6 @@
 
   const repo = new FullBrowserRepository();
 
-  function IndependenceDecorationsOverlay() {
-    useEffect(() => {
-      if (typeof document !== 'undefined') {
-        document.body.classList.remove('azaadi-theme-active');
-      }
-    }, []);
-    return null;
-  }
-  }
-
   // --- MAIN APP COMPONENT ---
   function HabibiBitesFullApp() {
     const [activePage, setActivePage] = useState('home');
@@ -1183,7 +1173,7 @@
     const cartSubtotal = cart.reduce((a, i) => a + (i.price * i.quantity), 0);
 
     return React.createElement('div', { style: { minHeight: '100vh', display: 'flex', flexDirection: 'column' } },
-      React.createElement(IndependenceDecorationsOverlay),
+
 
       
       // Global Navigation Header
@@ -1250,23 +1240,11 @@
     const [discountRule, setDiscountRule] = useState(null);
     const [restInfo, setRestInfo] = useState(null);
     const [homeDeals, setHomeDeals] = useState([]);
-    const [azaadiTheme, setAzaadiTheme] = useState(() => {
-      try {
-        const raw = localStorage.getItem('habibi_bites_delivery_settings');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed.seasonal_theme_enabled !== undefined) return !!parsed.seasonal_theme_enabled;
-        }
-      } catch (e) {}
-      return true;
-    });
+
     useEffect(() => {
       const loadData = () => {
         repo.getDiscountSettings().then(setDiscountRule).catch(() => {});
         repo.getRestaurantInfo().then(setRestInfo).catch(() => {});
-        if (repo.getSeasonalTheme) {
-          repo.getSeasonalTheme().then(res => setAzaadiTheme(!!res.enabled)).catch(() => {});
-        }
         repo.getDeals().then(data => {
           if (data && data.length > 0) {
             const featured = data.filter(d => d.show_on_home || d.showOnHome);
@@ -1914,7 +1892,6 @@
     const [feeInput, setFeeInput] = useState(150);
     const [maxInput, setMaxInput] = useState(50);
     const [enabledInput, setEnabledInput] = useState(false);
-    const [seasonalThemeInput, setSeasonalThemeInput] = useState(true);
 
     // Discount Settings
     const [discEnabled, setDiscEnabled] = useState(false);
@@ -2038,10 +2015,6 @@
 
         const s = await repo.getDeliverySettings();
         setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled);
-        if (repo.getSeasonalTheme) {
-          const theme = await repo.getSeasonalTheme();
-          setSeasonalThemeInput(theme.enabled);
-        }
         const disc = await repo.getDiscountSettings();
         setDiscEnabled(disc.enabled); setDiscType(disc.type); setDiscValue(disc.value);
         setDiscTarget(disc.targetType); setDiscCategory(disc.targetCategory || '');
@@ -2825,11 +2798,11 @@
         )
       ) : null,
 
-      // TAB 4: DELIVERY & CAPACITY SETTINGS & SEASONAL THEME
+      // TAB 4: DELIVERY & CAPACITY SETTINGS
       adminTab === 'settings' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' } },
-
         React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: '10px', border: '1px solid var(--border)' } },
           React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Delivery & Capacity Settings'),
+
           React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); await repo.saveDeliverySettings(enabledInput, feeInput, maxInput); const s = await repo.getDeliverySettings(); setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled); alert("✅ Delivery settings saved! All devices will update automatically."); } },
             React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', cursor: 'pointer' } },
               React.createElement('input', { type: 'checkbox', checked: enabledInput, onChange: e => setEnabledInput(e.target.checked) }),
