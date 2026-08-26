@@ -694,13 +694,7 @@ export const AdminPage = () => {
             onClick={async () => {
               const next = !seasonalThemeState;
               setSeasonalThemeState(next);
-              try {
-                const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
-                const parsed = JSON.parse(raw);
-                parsed.seasonal_theme_enabled = next;
-                localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
-                window.dispatchEvent(new Event('storage_changed'));
-              } catch (e) {}
+              // Persist to Supabase only — Realtime will update all other devices
               if (db.saveSeasonalTheme) {
                 await db.saveSeasonalTheme(next);
               }

@@ -1,38 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useDb } from '../contexts/DbContext.jsx';
 import { DealCard } from '../components/DealCard.jsx';
+import { useRealtimeSync } from '../hooks/useRealtimeSync.js';
 
 export const DealsPage = () => {
   const db = useDb();
   const [deals, setDeals] = useState([]);
   const [discountRule, setDiscountRule] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadData = async () => {
-      try {
-        const [fetchedDeals, fetchedDiscount] = await Promise.all([
-          db.getDeals(),
-          db.getDiscountSettings()
-        ]);
-        if (!isMounted) return;
+  const loadData = useCallback(async () => {
+    try {
+      const [fetchedDeals, fetchedDiscount] = await Promise.all([
+        db.getDeals(),
+        db.getDiscountSettings()
+      ]);
 
-        if (fetchedDeals && Array.isArray(fetchedDeals)) {
-          setDeals(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDeals) ? fetchedDeals : prev));
-        }
-        if (fetchedDiscount) {
-          setDiscountRule(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDiscount) ? fetchedDiscount : prev));
-        }
-      } catch (e) {}
-    };
-
-    loadData();
-    window.addEventListener('storage_changed', loadData);
-    return () => {
-      isMounted = false;
-      window.removeEventListener('storage_changed', loadData);
-    };
+      if (fetchedDeals && Array.isArray(fetchedDeals)) {
+        setDeals(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDeals) ? fetchedDeals : prev));
+      }
+      if (fetchedDiscount) {
+        setDiscountRule(prev => (JSON.stringify(prev) !== JSON.stringify(fetchedDiscount) ? fetchedDiscount : prev));
+      }
+    } catch (e) {}
   }, [db]);
+
+  // Initial load
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Supabase Realtime — re-fetch whenever deals or settings change on any device
+  useRealtimeSync(
+    ['deals', 'settings'],
+    (_table, _payload) => { loadData(); },
+    'deals-page-realtime'
+  );
 
   return (
     <main className="section-container page-top-margin">
@@ -76,3 +78,6 @@ export const DealsPage = () => {
     </main>
   );
 };
+
+
+export const DealsPage = () => {

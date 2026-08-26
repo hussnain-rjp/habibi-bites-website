@@ -13,14 +13,22 @@ let client = null;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
   try {
-    const supabaseSDK = (typeof createClient !== 'undefined') 
-      ? createClient 
+    const supabaseSDK = (typeof createClient !== 'undefined')
+      ? createClient
       : (typeof window !== 'undefined' && window.supabase ? window.supabase.createClient : null);
 
+    const realtimeOptions = {
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+    };
+
     if (supabaseSDK) {
-      client = supabaseSDK(SUPABASE_URL, SUPABASE_KEY);
+      client = supabaseSDK(SUPABASE_URL, SUPABASE_KEY, realtimeOptions);
     } else {
-      client = createClient(SUPABASE_URL, SUPABASE_KEY);
+      client = createClient(SUPABASE_URL, SUPABASE_KEY, realtimeOptions);
     }
   } catch (err) {
     console.warn("Supabase Client Initialization Warning:", err);

@@ -8,18 +8,10 @@ import { useDb } from '../contexts/DbContext.jsx';
  */
 export const IndependenceDecorations = () => {
   const db = useDb();
-  const [enabled, setEnabled] = useState(() => {
-    try {
-      const raw = localStorage.getItem('habibi_bites_delivery_settings');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.seasonal_theme_enabled !== undefined) {
-          return !!parsed.seasonal_theme_enabled;
-        }
-      }
-    } catch (e) {}
-    return true;
-  });
+  // Start with theme enabled (safe default) — DB value overrides immediately on mount.
+  // Do NOT read from localStorage: other devices have different localStorage state.
+  const [enabled, setEnabled] = useState(true);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -30,27 +22,15 @@ export const IndependenceDecorations = () => {
           if (isMounted && typeof res.enabled === 'boolean') {
             setEnabled(res.enabled);
           }
-        } else {
-          const raw = localStorage.getItem('habibi_bites_delivery_settings');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.seasonal_theme_enabled !== undefined && isMounted) {
-              setEnabled(!!parsed.seasonal_theme_enabled);
-            }
-          }
         }
+        // If db.getSeasonalTheme is unavailable the default (true) stays
+        // \u2014 Realtime will override it as soon as the settings channel is live.
       } catch (e) {
         console.warn('Seasonal theme sync error:', e);
       }
     };
 
     loadThemeState();
-
-    const handleStorageChange = () => loadThemeState();
-    window.addEventListener('storage_changed', handleStorageChange);
-    window.addEventListener('storage', handleStorageChange);
-
-    const pollInterval = setInterval(loadThemeState, 3000);
 
     let channel = null;
     if (db && db.client && db.client.channel) {
@@ -69,9 +49,6 @@ export const IndependenceDecorations = () => {
 
     return () => {
       isMounted = false;
-      window.removeEventListener('storage_changed', handleStorageChange);
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(pollInterval);
       if (channel && db && db.client && db.client.removeChannel) {
         try { db.client.removeChannel(channel); } catch (err) {}
       }

@@ -1,74 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useDb } from '../contexts/DbContext.jsx';
 import { DealCard } from '../components/DealCard.jsx';
+import { useRealtimeSync } from '../hooks/useRealtimeSync.js';
 
 export const Home = ({ setActivePage }) => {
   const db = useDb();
   const [featuredDeals, setFeaturedDeals] = useState([]);
   const [discountRule, setDiscountRule] = useState(null);
   const [restInfo, setRestInfo] = useState(null);
-  const [themeEnabled, setThemeEnabled] = useState(() => {
+  // Default true (show theme) — DB value overrides this immediately on first fetch.
+  // Do NOT read from localStorage: other devices have different localStorage state.
+  const [themeEnabled, setThemeEnabled] = useState(true);
+
+  const loadData = useCallback(async () => {
     try {
-      const raw = localStorage.getItem('habibi_bites_delivery_settings');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.seasonal_theme_enabled !== undefined) {
-          return !!parsed.seasonal_theme_enabled;
-        }
+      const [deals, disc, info, theme] = await Promise.all([
+        db.getDeals(),
+        db.getDiscountSettings(),
+        db.getRestaurantInfo(),
+        db.getSeasonalTheme ? db.getSeasonalTheme() : Promise.resolve(null)
+      ]);
+
+      if (deals && Array.isArray(deals)) {
+        const selected = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
+        const finalDeals = selected.length > 0 ? selected : deals.slice(0, 4);
+        setFeaturedDeals(prev => (JSON.stringify(prev) !== JSON.stringify(finalDeals) ? finalDeals : prev));
+      }
+
+      if (disc) {
+        setDiscountRule(prev => (JSON.stringify(prev) !== JSON.stringify(disc) ? disc : prev));
+      }
+
+      if (info) {
+        setRestInfo(prev => (JSON.stringify(prev) !== JSON.stringify(info) ? info : prev));
+      }
+
+      if (theme && typeof theme.enabled === 'boolean') {
+        setThemeEnabled(prev => (prev !== theme.enabled ? theme.enabled : prev));
       }
     } catch (e) {}
-    return true;
-  });
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadData = async () => {
-      try {
-        const [deals, disc, info, theme] = await Promise.all([
-          db.getDeals(),
-          db.getDiscountSettings(),
-          db.getRestaurantInfo(),
-          db.getSeasonalTheme ? db.getSeasonalTheme() : Promise.resolve(null)
-        ]);
-        if (!isMounted) return;
-
-        if (deals && Array.isArray(deals)) {
-          const selected = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
-          const finalDeals = selected.length > 0 ? selected : deals.slice(0, 4);
-          setFeaturedDeals(prev => (JSON.stringify(prev) !== JSON.stringify(finalDeals) ? finalDeals : prev));
-        }
-
-        if (disc) {
-          setDiscountRule(prev => (JSON.stringify(prev) !== JSON.stringify(disc) ? disc : prev));
-        }
-
-        if (info) {
-          setRestInfo(prev => (JSON.stringify(prev) !== JSON.stringify(info) ? info : prev));
-        }
-
-        if (theme && typeof theme.enabled === 'boolean') {
-          setThemeEnabled(prev => (prev !== theme.enabled ? theme.enabled : prev));
-        }
-      } catch (e) {}
-    };
-
-    loadData();
-    window.addEventListener('storage_changed', loadData);
-    window.addEventListener('storage', loadData);
-    const pollInterval = setInterval(loadData, 3000);
-    return () => {
-      isMounted = false;
-      window.removeEventListener('storage_changed', loadData);
-      window.removeEventListener('storage', loadData);
-      clearInterval(pollInterval);
-    };
   }, [db]);
 
-  const loadDeals = async () => {
-    const deals = await db.getDeals();
-    const selected = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
-    setFeaturedDeals(selected.length > 0 ? selected : deals.slice(0, 4));
-  };
+  // Initial data load on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Supabase Realtime subscription — fires for any change on these tables
+  // across ALL devices/browsers, not just the current one.
+  useRealtimeSync(
+    ['deals', 'settings'],
+    (_table, _payload) => { loadData(); },
+    'home-realtime'
+  );
 
   const heroDescription = restInfo?.heroText || 'Experience the ultimate flavor fusion. From brick-oven pizzas and double-patty beef burgers to clay-pot handis and crispy golden broast, we satisfy every craving.';
   const heroImageSrc = restInfo?.heroImage || '/assets/logo.png';

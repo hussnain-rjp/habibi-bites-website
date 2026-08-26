@@ -19,16 +19,8 @@ export class SupabaseRepository extends IRepository {
   // ── Menu Items ────────────────────────────────────────────────────────────
 
   async getMenuItems() {
-    let fallback = (typeof window !== 'undefined' && window.HABIBI_MENU) ? window.HABIBI_MENU.items : [];
+    const fallback = (typeof window !== 'undefined' && window.HABIBI_MENU) ? window.HABIBI_MENU.items : [];
     if (!this.client) return fallback;
-
-    const now = Date.now();
-    const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH['menu_items'] || 0) : 0;
-    const cachedData = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE['menu_items'] : null;
-
-    if (cachedData && (now - lastFetch < 15000)) {
-      return cachedData;
-    }
 
     try {
       checkRateLimit('menu', 'publicRead');
@@ -36,7 +28,7 @@ export class SupabaseRepository extends IRepository {
       const { data, error } = await this.client.from('menu_items').select('*');
       if (error) {
         console.error("Supabase getMenuItems Error:", error.message);
-        return cachedData || fallback;
+        return fallback;
       }
       if ((!data || data.length === 0) && !this._menuSeeded && fallback.length > 0) {
         this._menuSeeded = true;
@@ -51,31 +43,40 @@ export class SupabaseRepository extends IRepository {
           }));
           await this.client.from('menu_items').upsert(formattedDefaults);
           const seeded = await this.client.from('menu_items').select('*');
-          if (seeded.data && seeded.data.length > 0) return seeded.data;
+          if (seeded.data && seeded.data.length > 0) return this._mapMenuItems(seeded.data);
         } catch (e) {
           console.warn("Auto-seed menu_items error:", e.message);
         }
       }
       this._menuSeeded = true;
-      const mapped = (data || []).map(item => {
-        let imagePath = item.image || '';
-        let parsedPrices = item.prices;
-        if (typeof item.prices === 'string') {
-          try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
-        }
-        return { ...item, prices: parsedPrices, image: imagePath };
-      });
-
-      if (typeof window !== 'undefined') {
-        window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-        window.__HABIBI_MEMORY_STORE['menu_items'] = mapped;
-        window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
-        window.__HABIBI_LAST_FETCH['menu_items'] = Date.now();
-      }
-      return mapped;
+      return this._mapMenuItems(data || []);
     } catch (err) {
-      return cachedData || fallback;
+      return fallback;
     }
+  }
+
+  /**
+   * Maps raw DB rows to the shape the UI expects.
+   * Adds a ?v= cache-buster to image URLs so browsers re-fetch after admin edits.
+   */
+  _mapMenuItems(rows) {
+    return rows.map(item => {
+      let parsedPrices = item.prices;
+      if (typeof item.prices === 'string') {
+        try { parsedPrices = JSON.parse(item.prices); } catch (e) { parsedPrices = { default: 0 }; }
+      }
+      // Cache-bust image: append ?v=<updated_at timestamp> so browsers always
+      // load the latest image after an admin update, never a stale cached copy.
+      let image = item.image || '';
+      if (image && !image.startsWith('http') === false || (image && image.startsWith('http'))) {
+        // For any non-empty image URL, append the updated_at version param
+        if (image && item.updated_at) {
+          const sep = image.includes('?') ? '&' : '?';
+          image = `${image}${sep}v=${encodeURIComponent(item.updated_at)}`;
+        }
+      }
+      return { ...item, prices: parsedPrices, image };
+    });
   }
 
   async getMenuItemById(id) {
@@ -116,6 +117,7 @@ export class SupabaseRepository extends IRepository {
     };
     const { error } = await this.client.from('menu_items').update(payload).eq('id', String(item.id));
     if (error) throw new Error(error.message);
+    // Realtime will propagate this change to all subscribers automatically.
     return true;
   }
 
@@ -148,53 +150,20 @@ export class SupabaseRepository extends IRepository {
   // ── Deals ─────────────────────────────────────────────────────────────────
 
   async getDeals() {
-    let fallback = (typeof window !== 'undefined' && window.HABIBI_DEALS) ? window.HABIBI_DEALS : [];
+    const fallback = (typeof window !== 'undefined' && window.HABIBI_DEALS) ? window.HABIBI_DEALS : [];
     if (!this.client) return fallback;
-
-    const FETCH_TTL = 30000;
-    const now = Date.now();
-    if (typeof window !== 'undefined') {
-      window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
-      window.__HABIBI_INFLIGHT = window.__HABIBI_INFLIGHT || {};
-      window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-    }
-
-    const lastFetch = window.__HABIBI_LAST_FETCH?.['deals'] || 0;
-    const cachedData = window.__HABIBI_MEMORY_STORE?.['deals'];
-
-    if (cachedData && (now - lastFetch < FETCH_TTL)) {
-      return cachedData;
-    }
-
-    if (window.__HABIBI_INFLIGHT?.['deals']) {
-      await window.__HABIBI_INFLIGHT['deals'];
-      return window.__HABIBI_MEMORY_STORE?.['deals'] || cachedData || fallback;
-    }
 
     try {
       checkRateLimit('deals', 'publicRead');
       recordAttempt('deals', 'publicRead');
-      window.__HABIBI_INFLIGHT['deals'] = this.client
+      const { data, error } = await this.client
         .from('deals')
         .select('*')
-        .order('id', { ascending: true })
-        .then(({ data, error }) => {
-          window.__HABIBI_LAST_FETCH['deals'] = Date.now();
-          delete window.__HABIBI_INFLIGHT['deals'];
-          if (!error && Array.isArray(data)) {
-            window.__HABIBI_MEMORY_STORE['deals'] = data;
-          }
-          return data;
-        })
-        .catch(err => {
-          delete window.__HABIBI_INFLIGHT['deals'];
-          return null;
-        });
-
-      const res = await window.__HABIBI_INFLIGHT['deals'];
-      return res || cachedData || fallback;
+        .order('id', { ascending: true });
+      if (error || !Array.isArray(data)) return fallback;
+      return data;
     } catch (e) {
-      return cachedData || fallback;
+      return fallback;
     }
   }
 
@@ -489,110 +458,47 @@ export class SupabaseRepository extends IRepository {
     const defaultDiscount = { enabled: false, type: 'percentage', value: 0, targetType: 'all', targetCategory: '', targetItemId: '', label: '' };
     const defaultDelivery = { enabled: false, fee: 150, maxOrders: 50 };
 
-    let storeSettings = {};
+    // Always fetch fresh from Supabase — localStorage is NOT used as a source of
+    // truth here so that all devices always see the same authoritative DB value.
+    if (!this.client) {
+      return { delivery: defaultDelivery, discount: defaultDiscount, restaurant: defaultInfo, seasonalTheme: { enabled: true } };
+    }
+
     try {
-      const raw = localStorage.getItem('habibi_bites_delivery_settings');
-      if (raw) storeSettings = JSON.parse(raw);
-    } catch (e) {}
+      const { data, error } = await this.client
+        .from('settings')
+        .select('*')
+        .eq('id', 1)
+        .maybeSingle();
 
-    const FETCH_TTL = 30000;
-    const now = Date.now();
-    if (typeof window !== 'undefined') {
-      window.__HABIBI_LAST_FETCH = window.__HABIBI_LAST_FETCH || {};
-      window.__HABIBI_INFLIGHT = window.__HABIBI_INFLIGHT || {};
-      window.__HABIBI_MEMORY_STORE = window.__HABIBI_MEMORY_STORE || {};
-    }
-
-    const lastFetch = window.__HABIBI_LAST_FETCH?.['settings'] || 0;
-    if (this.client && (now - lastFetch > FETCH_TTL)) {
-      if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT['settings']) {
-        window.__HABIBI_INFLIGHT['settings'] = this.client
-          .from('settings')
-          .select('*')
-          .eq('id', 1)
-          .maybeSingle()
-          .then(({ data, error }) => {
-            if (typeof window !== 'undefined') {
-              window.__HABIBI_LAST_FETCH['settings'] = Date.now();
-              delete window.__HABIBI_INFLIGHT['settings'];
-            }
-            if (!error && data) {
-              window.__HABIBI_MEMORY_STORE['settings_raw'] = data;
-              let parsedDisc = data.discount_data;
-              if (typeof parsedDisc === 'string') {
-                try { parsedDisc = JSON.parse(parsedDisc); } catch (e) { parsedDisc = null; }
-              }
-              let parsedRest = data.restaurant_info;
-              if (typeof parsedRest === 'string') {
-                try { parsedRest = JSON.parse(parsedRest); } catch (e) { parsedRest = null; }
-              }
-              const merged = {
-                ...storeSettings,
-                enabled: !!data.delivery_charge_enabled,
-                fee: parseFloat(data.delivery_charge_amount) || 0,
-                maxOrders: parseInt(data.max_active_orders) || 50,
-                seasonal_theme_enabled: data.seasonal_theme_enabled !== undefined ? !!data.seasonal_theme_enabled : true,
-                discount_data: parsedDisc || storeSettings.discount_data || null,
-                restaurant_info: parsedRest || storeSettings.restaurant_info || null
-              };
-              try {
-                const newStr = JSON.stringify(merged);
-                const existing = localStorage.getItem('habibi_bites_delivery_settings');
-                if (existing !== newStr) {
-                  localStorage.setItem('habibi_bites_delivery_settings', newStr);
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new Event('storage_changed'));
-                  }
-                }
-              } catch (e) {}
-            }
-          })
-          .catch(() => {
-            if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT['settings'];
-          });
+      if (error || !data) {
+        return { delivery: defaultDelivery, discount: defaultDiscount, restaurant: defaultInfo, seasonalTheme: { enabled: true } };
       }
-    }
 
-    if (window.__HABIBI_INFLIGHT?.['settings']) {
-      await window.__HABIBI_INFLIGHT['settings'];
-    }
+      let disc = defaultDiscount;
+      let rest = defaultInfo;
+      let themeEnabled = true;
 
-    const rawData = window.__HABIBI_MEMORY_STORE?.['settings_raw'];
-    let disc = defaultDiscount;
-    let rest = defaultInfo;
-    let deliv = defaultDelivery;
-    let themeEnabled = true;
-
-    if (rawData) {
-      if (rawData.discount_data) {
-        disc = typeof rawData.discount_data === 'string' ? JSON.parse(rawData.discount_data) : rawData.discount_data;
+      if (data.discount_data) {
+        disc = typeof data.discount_data === 'string' ? JSON.parse(data.discount_data) : data.discount_data;
       }
-      if (rawData.restaurant_info) {
-        const parsedR = typeof rawData.restaurant_info === 'string' ? JSON.parse(rawData.restaurant_info) : rawData.restaurant_info;
+      if (data.restaurant_info) {
+        const parsedR = typeof data.restaurant_info === 'string' ? JSON.parse(data.restaurant_info) : data.restaurant_info;
         rest = { ...defaultInfo, ...parsedR };
       }
-      deliv = {
-        enabled: !!rawData.delivery_charge_enabled,
-        fee: parseFloat(rawData.delivery_charge_amount) || 0,
-        maxOrders: parseInt(rawData.max_active_orders) || 50
+      const deliv = {
+        enabled: !!data.delivery_charge_enabled,
+        fee: parseFloat(data.delivery_charge_amount) || 0,
+        maxOrders: parseInt(data.max_active_orders) || 50,
       };
-      if (rawData.seasonal_theme_enabled !== undefined && rawData.seasonal_theme_enabled !== null) {
-        themeEnabled = !!rawData.seasonal_theme_enabled;
+      if (data.seasonal_theme_enabled !== undefined && data.seasonal_theme_enabled !== null) {
+        themeEnabled = !!data.seasonal_theme_enabled;
       }
-    } else if (storeSettings) {
-      if (storeSettings.discount_data) disc = storeSettings.discount_data;
-      if (storeSettings.restaurant_info) rest = { ...defaultInfo, ...storeSettings.restaurant_info };
-      deliv = {
-        enabled: !!storeSettings.enabled,
-        fee: parseFloat(storeSettings.fee) || 0,
-        maxOrders: parseInt(storeSettings.maxOrders) || 50
-      };
-      if (storeSettings.seasonal_theme_enabled !== undefined) {
-        themeEnabled = !!storeSettings.seasonal_theme_enabled;
-      }
-    }
 
-    return { delivery: deliv, discount: disc, restaurant: rest, seasonalTheme: { enabled: themeEnabled } };
+      return { delivery: deliv, discount: disc, restaurant: rest, seasonalTheme: { enabled: themeEnabled } };
+    } catch (err) {
+      return { delivery: defaultDelivery, discount: defaultDiscount, restaurant: defaultInfo, seasonalTheme: { enabled: true } };
+    }
   }
 
   async getDeliverySettings() {
@@ -655,18 +561,9 @@ export class SupabaseRepository extends IRepository {
   }
 
   async saveSeasonalTheme(enabled) {
-    if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH['settings'] = 0;
     const isEnabled = !!enabled;
-    try {
-      const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
-      const parsed = JSON.parse(raw);
-      parsed.seasonal_theme_enabled = isEnabled;
-      localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('storage_changed'));
-      }
-    } catch (e) {}
-
+    // Write to Supabase only — Realtime will propagate the change to all
+    // subscribed devices automatically. No localStorage write needed.
     if (this.client) {
       try {
         checkRateLimit('admin_write', 'authenticatedAction');
@@ -689,16 +586,19 @@ export class SupabaseRepository extends IRepository {
   async saveMenuItem(item) {
     checkRateLimit('admin_write', 'authenticatedAction');
     recordAttempt('admin_write', 'authenticatedAction');
+    // Strip any existing ?v= cache-buster before saving — store only the clean URL
+    const cleanImage = (item.image || '').split('?')[0];
     const payload = {
       id: item.id,
       name: item.name,
       category: item.category,
       description: item.description || '',
       prices: item.prices,
-      image: item.image || ''
+      image: cleanImage
     };
     const { data, error } = await this.client.from('menu_items').upsert(payload).select().single();
     if (error) throw new Error(error.message);
+    // Realtime will propagate the change to all subscribers automatically.
     return data || item;
   }
 
