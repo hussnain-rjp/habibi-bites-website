@@ -844,6 +844,7 @@
 
     async saveDeliverySettings(enabled, fee, maxOrders) {
       if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
+      if (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) delete window.__HABIBI_MEMORY_STORE['settings_raw'];
       const current = readStore(DB_KEYS.SETTINGS) || {};
       const s = { ...current, enabled: !!enabled, fee: parseFloat(fee)||0, maxOrders: parseInt(maxOrders)||50 };
       writeStore(DB_KEYS.SETTINGS, s);
@@ -855,8 +856,7 @@
             id: 1,
             delivery_charge_enabled: s.enabled,
             delivery_charge_amount: s.fee,
-            max_active_orders: s.maxOrders,
-            discount_data: existing?.discount_data || null
+            max_active_orders: s.maxOrders
           };
           await supabaseClient.from('settings').upsert(payload);
         } catch (err) {}
@@ -924,15 +924,16 @@
 
     async saveDiscountSettings(data) {
       if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
+      if (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) delete window.__HABIBI_MEMORY_STORE['settings_raw'];
       writeStore('habibi_discount_settings', data);
+      const currentSettings = readStore(DB_KEYS.SETTINGS) || {};
+      writeStore(DB_KEYS.SETTINGS, { ...currentSettings, discount_data: data });
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
+            ...(existing || {}),
             id: 1,
-            delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
-            delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
-            max_active_orders: existing?.max_active_orders ?? 50,
             discount_data: data
           };
           await supabaseClient.from('settings').upsert(payload);
@@ -958,16 +959,16 @@
 
     async saveRestaurantInfo(info) {
       if (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] = 0;
+      if (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) delete window.__HABIBI_MEMORY_STORE['settings_raw'];
       writeStore(DB_KEYS.RESTAURANT_INFO, info);
+      const currentSettings = readStore(DB_KEYS.SETTINGS) || {};
+      writeStore(DB_KEYS.SETTINGS, { ...currentSettings, restaurant_info: info });
       if (supabaseClient) {
         try {
           const { data: existing } = await supabaseClient.from('settings').select('*').eq('id', 1).maybeSingle();
           const payload = {
+            ...(existing || {}),
             id: 1,
-            delivery_charge_enabled: existing?.delivery_charge_enabled ?? false,
-            delivery_charge_amount: existing?.delivery_charge_amount ?? 150,
-            max_active_orders: existing?.max_active_orders ?? 50,
-            discount_data: existing?.discount_data || null,
             restaurant_info: info
           };
           const { error } = await supabaseClient.from('settings').upsert(payload);
