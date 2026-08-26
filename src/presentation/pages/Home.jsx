@@ -8,17 +8,13 @@ export const Home = ({ setActivePage }) => {
   const [featuredDeals, setFeaturedDeals] = useState([]);
   const [discountRule, setDiscountRule] = useState(null);
   const [restInfo, setRestInfo] = useState(null);
-  // Default true (show theme) — DB value overrides this immediately on first fetch.
-  // Do NOT read from localStorage: other devices have different localStorage state.
-  const [themeEnabled, setThemeEnabled] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
-      const [deals, disc, info, theme] = await Promise.all([
+      const [deals, disc, info] = await Promise.all([
         db.getDeals(),
         db.getDiscountSettings(),
-        db.getRestaurantInfo(),
-        db.getSeasonalTheme ? db.getSeasonalTheme() : Promise.resolve(null)
+        db.getRestaurantInfo()
       ]);
 
       if (deals && Array.isArray(deals)) {
@@ -34,12 +30,9 @@ export const Home = ({ setActivePage }) => {
       if (info) {
         setRestInfo(prev => (JSON.stringify(prev) !== JSON.stringify(info) ? info : prev));
       }
-
-      if (theme && typeof theme.enabled === 'boolean') {
-        setThemeEnabled(prev => (prev !== theme.enabled ? theme.enabled : prev));
-      }
     } catch (e) {}
   }, [db]);
+
 
   // Initial data load on mount
   useEffect(() => {
@@ -63,12 +56,6 @@ export const Home = ({ setActivePage }) => {
       <section className="hero-section">
         <div className="hero-container">
           <div className="hero-content">
-            {themeEnabled && (
-              <div className="azaadi-hero-banner">
-                <span>🇵🇰</span>
-                <span>🎉 14th August Azaadi Special — Happy Independence Day!</span>
-              </div>
-            )}
             <span className="hero-tag">🔥 Now Delivering in Qila Didar Singh</span>
             <h1 className="hero-title">Delicious Food <br/>Served with <span>Passion</span></h1>
             <p className="hero-desc">{heroDescription}</p>
