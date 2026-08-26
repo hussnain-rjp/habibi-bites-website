@@ -1119,86 +1119,13 @@
   const repo = new FullBrowserRepository();
 
   function IndependenceDecorationsOverlay() {
-    const [enabled, setEnabled] = useState(() => {
-      try {
-        const raw = localStorage.getItem('habibi_bites_delivery_settings');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed.seasonal_theme_enabled !== undefined) return !!parsed.seasonal_theme_enabled;
-        }
-      } catch (e) {}
-      return true;
-    });
-
-    useEffect(() => {
-      let isMounted = true;
-      const loadThemeState = async () => {
-        try {
-          if (repo && repo.getSeasonalTheme) {
-            const res = await repo.getSeasonalTheme();
-            if (isMounted && typeof res.enabled === 'boolean') setEnabled(res.enabled);
-          } else {
-            const raw = localStorage.getItem('habibi_bites_delivery_settings');
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (parsed.seasonal_theme_enabled !== undefined && isMounted) {
-                setEnabled(!!parsed.seasonal_theme_enabled);
-              }
-            }
-          }
-        } catch (e) {}
-      };
-
-      loadThemeState();
-
-      const handleStorageChange = () => loadThemeState();
-      window.addEventListener('storage_changed', handleStorageChange);
-      window.addEventListener('storage', handleStorageChange);
-
-      const pollInterval = setInterval(loadThemeState, 3000);
-
-      let channel = null;
-      if (supabaseClient && supabaseClient.channel) {
-        try {
-          channel = supabaseClient.channel('public-settings-theme-js')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, (payload) => {
-              if (payload.new && payload.new.seasonal_theme_enabled !== undefined) {
-                if (isMounted) setEnabled(!!payload.new.seasonal_theme_enabled);
-              } else {
-                loadThemeState();
-              }
-            })
-            .subscribe();
-        } catch (err) {}
-      }
-
-      return () => {
-        isMounted = false;
-        window.removeEventListener('storage_changed', handleStorageChange);
-        window.removeEventListener('storage', handleStorageChange);
-        clearInterval(pollInterval);
-        if (channel && supabaseClient && supabaseClient.removeChannel) {
-          try { supabaseClient.removeChannel(channel); } catch (err) {}
-        }
-      };
-    }, []);
-
     useEffect(() => {
       if (typeof document !== 'undefined') {
-        if (enabled) {
-          document.body.classList.add('azaadi-theme-active');
-        } else {
-          document.body.classList.remove('azaadi-theme-active');
-        }
+        document.body.classList.remove('azaadi-theme-active');
       }
-      return () => {
-        if (typeof document !== 'undefined') {
-          document.body.classList.remove('azaadi-theme-active');
-        }
-      };
-    }, [enabled]);
-
-    if (!enabled) return null;
+    }, []);
+    return null;
+  }
 
     return React.createElement('div', { className: 'independence-theme-wrapper', style: { pointerEvents: 'none', userSelect: 'none' } },
       React.createElement('div', {
@@ -1570,10 +1497,6 @@
       React.createElement('section', { className: 'hero-section' },
         React.createElement('div', { className: 'hero-container' },
           React.createElement('div', { className: 'hero-content' },
-            azaadiTheme ? React.createElement('div', { className: 'azaadi-hero-banner' },
-              React.createElement('span', null, '🇵🇰'),
-              React.createElement('span', null, '🎉 14th August Azaadi Special — Happy Independence Day!')
-            ) : null,
             React.createElement('span', { className: 'hero-tag' }, '🔥 Now Delivering in Qila Didar Singh'),
             React.createElement('h1', { className: 'hero-title' }, 'Delicious Food ', React.createElement('br'), 'Served with ', React.createElement('span', null, 'Passion')),
             React.createElement('p', { className: 'hero-desc' }, heroDesc),
@@ -3106,43 +3029,7 @@
 
       // TAB 4: DELIVERY & CAPACITY SETTINGS & SEASONAL THEME
       adminTab === 'settings' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' } },
-        React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: '10px', border: '1px solid var(--border)' } },
-          React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0, marginBottom: '8px' } }, '🇵🇰 Seasonal Independence Day Theme'),
-          React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '16px', marginTop: 0 } }, 'Show Independence Day Decorations (Floating flags, top bunting streamers jhandiyan, & balloons) across the site.'),
-          React.createElement('div', {
-            onClick: async () => {
-              const next = !seasonalThemeInput;
-              setSeasonalThemeInput(next);
-              try {
-                const raw = localStorage.getItem('habibi_bites_delivery_settings') || '{}';
-                const parsed = JSON.parse(raw);
-                parsed.seasonal_theme_enabled = next;
-                localStorage.setItem('habibi_bites_delivery_settings', JSON.stringify(parsed));
-                window.dispatchEvent(new Event('storage_changed'));
-              } catch (e) {}
-              if (repo.saveSeasonalTheme) {
-                await repo.saveSeasonalTheme(next);
-              }
-            },
-            style: {
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 18px', cursor: 'pointer', borderRadius: '10px',
-              background: seasonalThemeInput ? 'rgba(37, 211, 102, 0.15)' : 'var(--bg-elevated)',
-              border: `2px solid ${seasonalThemeInput ? '#25d366' : 'var(--border)'}`,
-              transition: 'all 0.2s ease'
-            }
-          },
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
-              React.createElement('span', { style: { fontSize: '1.3rem' } }, seasonalThemeInput ? '🇵🇰' : '⚪'),
-              React.createElement('span', { style: { fontWeight: 800, fontSize: '0.95rem', color: seasonalThemeInput ? '#25d366' : '#fff' } },
-                seasonalThemeInput ? 'Independence Theme: ON' : 'Independence Theme: OFF'
-              )
-            ),
-            React.createElement('div', { style: { width: '48px', height: '26px', borderRadius: '20px', background: seasonalThemeInput ? '#25d366' : '#4b5563', position: 'relative', transition: 'all 0.2s ease' } },
-              React.createElement('div', { style: { width: '20px', height: '20px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: seasonalThemeInput ? '25px' : '3px', transition: 'all 0.2s ease' } })
-            )
-          )
-        ),
+
         React.createElement('div', { style: { background: 'var(--bg-panel)', padding: '24px', borderRadius: '10px', border: '1px solid var(--border)' } },
           React.createElement('h3', { style: { color: 'var(--accent)', marginTop: 0 } }, 'Delivery & Capacity Settings'),
           React.createElement('form', { onSubmit: async (e) => { e.preventDefault(); await repo.saveDeliverySettings(enabledInput, feeInput, maxInput); const s = await repo.getDeliverySettings(); setFeeInput(s.fee); setMaxInput(s.maxOrders); setEnabledInput(s.enabled); alert("✅ Delivery settings saved! All devices will update automatically."); } },
