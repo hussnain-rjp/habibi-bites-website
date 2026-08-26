@@ -7,15 +7,28 @@ export const Home = ({ setActivePage }) => {
   const [featuredDeals, setFeaturedDeals] = useState([]);
   const [discountRule, setDiscountRule] = useState(null);
   const [restInfo, setRestInfo] = useState(null);
+  const [themeEnabled, setThemeEnabled] = useState(() => {
+    try {
+      const raw = localStorage.getItem('habibi_bites_delivery_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.seasonal_theme_enabled !== undefined) {
+          return !!parsed.seasonal_theme_enabled;
+        }
+      }
+    } catch (e) {}
+    return true;
+  });
 
   useEffect(() => {
     let isMounted = true;
     const loadData = async () => {
       try {
-        const [deals, disc, info] = await Promise.all([
+        const [deals, disc, info, theme] = await Promise.all([
           db.getDeals(),
           db.getDiscountSettings(),
-          db.getRestaurantInfo()
+          db.getRestaurantInfo(),
+          db.getSeasonalTheme ? db.getSeasonalTheme() : Promise.resolve(null)
         ]);
         if (!isMounted) return;
 
@@ -32,19 +45,33 @@ export const Home = ({ setActivePage }) => {
         if (info) {
           setRestInfo(prev => (JSON.stringify(prev) !== JSON.stringify(info) ? info : prev));
         }
+
+        if (theme && typeof theme.enabled === 'boolean') {
+          setThemeEnabled(prev => (prev !== theme.enabled ? theme.enabled : prev));
+        }
       } catch (e) {}
     };
 
     loadData();
     window.addEventListener('storage_changed', loadData);
+    window.addEventListener('storage', loadData);
+    const pollInterval = setInterval(loadData, 3000);
     return () => {
       isMounted = false;
       window.removeEventListener('storage_changed', loadData);
+      window.removeEventListener('storage', loadData);
+      clearInterval(pollInterval);
     };
   }, [db]);
 
+  const loadDeals = async () => {
+    const deals = await db.getDeals();
+    const selected = deals.filter(d => [1, 7, 10, 13].includes(Number(d.id)));
+    setFeaturedDeals(selected.length > 0 ? selected : deals.slice(0, 4));
+  };
+
+  const heroDescription = restInfo?.heroText || 'Experience the ultimate flavor fusion. From brick-oven pizzas and double-patty beef burgers to clay-pot handis and crispy golden broast, we satisfy every craving.';
   const heroImageSrc = restInfo?.heroImage || '/assets/logo.png';
-  const heroDescription = restInfo?.heroText || 'Experience the ultimate flavor fusion with our freshly baked pizzas, juicy gourmet burgers, crunchy zinger rolls, and traditional broast items. Fresh ingredients, lightning-fast delivery!';
 
   return (
     <main>
@@ -52,6 +79,12 @@ export const Home = ({ setActivePage }) => {
       <section className="hero-section">
         <div className="hero-container">
           <div className="hero-content">
+            {themeEnabled && (
+              <div className="azaadi-hero-banner">
+                <span>🇵🇰</span>
+                <span>🎉 14th August Azaadi Special — Happy Independence Day!</span>
+              </div>
+            )}
             <span className="hero-tag">🔥 Now Delivering in Qila Didar Singh</span>
             <h1 className="hero-title">Delicious Food <br/>Served with <span>Passion</span></h1>
             <p className="hero-desc">{heroDescription}</p>
