@@ -351,28 +351,27 @@
       if (readStore(DB_KEYS.ORDERS) === null || readStore(DB_KEYS.ORDERS) === undefined) writeStore(DB_KEYS.ORDERS, []);
       if (!readStore(DB_KEYS.REVIEWS)) writeStore(DB_KEYS.REVIEWS, DEFAULT_REVIEWS);
       if (!readStore(DB_KEYS.LAST_ORDER_ID)) writeStore(DB_KEYS.LAST_ORDER_ID, 5103);
-      if (!readStore(DB_KEYS.SETTINGS)) writeStore(DB_KEYS.SETTINGS, { enabled: false, fee: 150, maxOrders: 50 });
-      if (!readStore(DB_KEYS.MENU_ITEMS) && window.HABIBI_MENU) writeStore(DB_KEYS.MENU_ITEMS, window.HABIBI_MENU.items || []);
-      if (!readStore(DB_KEYS.DEALS) && window.HABIBI_DEALS) writeStore(DB_KEYS.DEALS, window.HABIBI_DEALS || []);
+      if (!readStore(DB_KEYS.SETTINGS) && !supabaseClient) writeStore(DB_KEYS.SETTINGS, { enabled: false, fee: 150, maxOrders: 50 });
+      if (!readStore(DB_KEYS.MENU_ITEMS) && !supabaseClient && window.HABIBI_MENU) writeStore(DB_KEYS.MENU_ITEMS, window.HABIBI_MENU.items || []);
+      if (!readStore(DB_KEYS.DEALS) && !supabaseClient && window.HABIBI_DEALS) writeStore(DB_KEYS.DEALS, window.HABIBI_DEALS || []);
     }
 
     async getMenuItems() {
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : null;
       let storeItems = readStore(DB_KEYS.MENU_ITEMS);
       let fallbackItems = (window.HABIBI_MENU && Array.isArray(window.HABIBI_MENU.items)) ? window.HABIBI_MENU.items : [];
-      let localItems = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackItems);
 
       const now = Date.now();
       const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.MENU_ITEMS] || 0) : 0;
 
-      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+      if (supabaseClient && (now - lastFetch > FETCH_TTL || (!memoryItems && !storeItems))) {
         if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS]) {
           window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS] = supabaseClient.from('menu_items').select('*').then(({ data, error }) => {
             if (typeof window !== 'undefined') {
               window.__HABIBI_LAST_FETCH[DB_KEYS.MENU_ITEMS] = Date.now();
               delete window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS];
             }
-            if (!error && Array.isArray(data)) {
+            if (!error && Array.isArray(data) && data.length > 0) {
               const mapped = data.map(item => {
                 let parsedPrices = item.prices;
                 if (typeof item.prices === 'string') {
@@ -382,7 +381,7 @@
                   id: String(item.id),
                   name: item.name,
                   category: item.category,
-                  description: item.description,
+                  description: item.description || '',
                   prices: parsedPrices,
                   image: item.image || ''
                 };
@@ -393,8 +392,15 @@
             if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS];
           });
         }
+        if ((!memoryItems && !storeItems) && window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS]) {
+          await window.__HABIBI_INFLIGHT[DB_KEYS.MENU_ITEMS];
+          memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.MENU_ITEMS] : null;
+          storeItems = readStore(DB_KEYS.MENU_ITEMS);
+        }
       }
-      return (localItems !== null && localItems !== undefined) ? localItems : fallbackItems;
+
+      let localItems = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackItems);
+      return (localItems !== null && localItems !== undefined && localItems.length > 0) ? localItems : fallbackItems;
     }
 
     async saveMenuItem(item) {
@@ -454,27 +460,33 @@
       let memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : null;
       let storeItems = readStore(DB_KEYS.DEALS);
       let fallbackDeals = (window.HABIBI_DEALS && Array.isArray(window.HABIBI_DEALS)) ? window.HABIBI_DEALS : [];
-      let localDeals = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackDeals);
 
       const now = Date.now();
       const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.DEALS] || 0) : 0;
 
-      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+      if (supabaseClient && (now - lastFetch > FETCH_TTL || (!memoryItems && !storeItems))) {
         if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.DEALS]) {
           window.__HABIBI_INFLIGHT[DB_KEYS.DEALS] = supabaseClient.from('deals').select('*').order('id', { ascending: true }).then(({ data, error }) => {
             if (typeof window !== 'undefined') {
               window.__HABIBI_LAST_FETCH[DB_KEYS.DEALS] = Date.now();
               delete window.__HABIBI_INFLIGHT[DB_KEYS.DEALS];
             }
-            if (!error && Array.isArray(data)) {
+            if (!error && Array.isArray(data) && data.length > 0) {
               writeStore(DB_KEYS.DEALS, data);
             }
           }).catch(err => {
             if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.DEALS];
           });
         }
+        if ((!memoryItems && !storeItems) && window.__HABIBI_INFLIGHT[DB_KEYS.DEALS]) {
+          await window.__HABIBI_INFLIGHT[DB_KEYS.DEALS];
+          memoryItems = (typeof window !== 'undefined' && window.__HABIBI_MEMORY_STORE) ? window.__HABIBI_MEMORY_STORE[DB_KEYS.DEALS] : null;
+          storeItems = readStore(DB_KEYS.DEALS);
+        }
       }
-      return (localDeals !== null && localDeals !== undefined) ? localDeals : fallbackDeals;
+
+      let localDeals = (memoryItems !== null && memoryItems !== undefined) ? memoryItems : ((storeItems !== null && storeItems !== undefined) ? storeItems : fallbackDeals);
+      return (localDeals !== null && localDeals !== undefined && localDeals.length > 0) ? localDeals : fallbackDeals;
     }
 
     async saveDeal(deal) {
@@ -776,8 +788,9 @@
       const now = Date.now();
       const lastFetch = (typeof window !== 'undefined' && window.__HABIBI_LAST_FETCH) ? (window.__HABIBI_LAST_FETCH[DB_KEYS.SETTINGS] || 0) : 0;
       let storeSettings = readStore(DB_KEYS.SETTINGS) || {};
+      const isFirstVisit = !storeSettings.restaurant_info;
 
-      if (supabaseClient && (now - lastFetch > FETCH_TTL)) {
+      if (supabaseClient && (now - lastFetch > FETCH_TTL || isFirstVisit)) {
         if (typeof window !== 'undefined' && !window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS]) {
           window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS] = supabaseClient
             .from('settings')
@@ -814,6 +827,10 @@
             }).catch(err => {
               if (typeof window !== 'undefined') delete window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS];
             });
+        }
+        if (isFirstVisit && window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS]) {
+          await window.__HABIBI_INFLIGHT[DB_KEYS.SETTINGS];
+          storeSettings = readStore(DB_KEYS.SETTINGS) || {};
         }
       }
       return storeSettings;
