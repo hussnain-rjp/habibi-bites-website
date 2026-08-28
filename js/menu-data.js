@@ -47,7 +47,7 @@ window.HABIBI_MENU = {
       description: "Fajita style chicken strips, bell peppers, onions, tomatoes, and melting mozzarella.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (72).jpg"
+      image: "assets/images (72).jpg"
     },
     {
       id: "pizza_malai_boti",
@@ -56,7 +56,7 @@ window.HABIBI_MENU = {
       description: "Creamy Malai Boti chicken chunks, rich white cream sauce, green chilies, and onions.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (69).jpg"
+      image: "assets/images (69).jpg"
     },
     {
       id: "pizza_peproni",
@@ -65,7 +65,7 @@ window.HABIBI_MENU = {
       description: "Generous layout of premium pepperoni over a rich marinara base with loaded cheese.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (70).jpg"
+      image: "assets/images (70).jpg"
     },
     {
       id: "pizza_corn_lover",
@@ -74,7 +74,7 @@ window.HABIBI_MENU = {
       description: "Sweet golden corn kernels, special cream base, sliced black olives, and cheese layer.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (74).jpg"
+      image: "assets/images (74).jpg"
     },
     {
       id: "pizza_cheese_lover",
@@ -83,7 +83,7 @@ window.HABIBI_MENU = {
       description: "A decadent blend of mozzarella, cheddar, and parmesan melted on our herb-crusted house dough.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (71).jpg"
+      image: "assets/images (71).jpg"
     },
     {
       id: "pizza_supreme",
@@ -92,7 +92,7 @@ window.HABIBI_MENU = {
       description: "Spicy chicken, chicken sausages, bell peppers, mushrooms, black olives, and red onions.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (72).jpg"
+      image: "assets/images (72).jpg"
     },
     {
       id: "pizza_peri_peri",
@@ -101,7 +101,7 @@ window.HABIBI_MENU = {
       description: "Spicy peri peri marinated chicken chunks, sliced jalapeños, onions, and hot sauce swirl.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (73).jpg"
+      image: "assets/images (73).jpg"
     },
     {
       id: "pizza_veg_lover",
@@ -110,7 +110,7 @@ window.HABIBI_MENU = {
       description: "Fresh mushrooms, sliced tomatoes, bell peppers, sweet corn, black olives, and red onions.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (75).jpg"
+      image: "assets/images (75).jpg"
     },
     {
       id: "pizza_afghan_tikka",
@@ -119,7 +119,7 @@ window.HABIBI_MENU = {
       description: "Tender Afghan style mild chicken boti, yogurt-based green sauce, onions, and white cheese.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (77).jpg"
+      image: "assets/images (77).jpg"
     },
     {
       id: "pizza_tandoori",
@@ -128,7 +128,7 @@ window.HABIBI_MENU = {
       description: "Smoky tandoori grilled chicken pieces, traditional tandoori sauce, onions, coriander, and lime juice.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (79).jpg"
+      image: "assets/images (79).jpg"
     },
     {
       id: "pizza_achari",
@@ -137,7 +137,7 @@ window.HABIBI_MENU = {
       description: "Tangy pickled chicken pieces, homemade achar sauce, red chilies, and layered mozzarella.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (78).jpg"
+      image: "assets/images (78).jpg"
     },
     {
       id: "pizza_creamy",
@@ -146,7 +146,7 @@ window.HABIBI_MENU = {
       description: "House special rich garlic-cream spread base, loaded with herb chicken boti and green toppings.",
       type: "pizza_standard",
       prices: { small: 550, regular: 1150, large: 1600, xlarge: 2250 },
-      image: "images (76).jpg"
+      image: "assets/images (76).jpg"
     },
 
     // --- PIZZAS (Special Flavors) ---
@@ -157,7 +157,7 @@ window.HABIBI_MENU = {
       description: "Minced beef, juicy beef meatball crumbles, bell peppers, red onions, and hot bbq drizzles.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (81).jpg"
+      image: "assets/images (81).jpg"
     },
     {
       id: "pizza_arabic",
@@ -166,7 +166,7 @@ window.HABIBI_MENU = {
       description: "Arabic spice chicken kebab bits, garlic sauce base, sesame seeds, and green olives.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (82).jpg"
+      image: "assets/images (82).jpg"
     },
     {
       id: "pizza_4in1",
@@ -175,7 +175,7 @@ window.HABIBI_MENU = {
       description: "Four corners, four flavors (Tikka, Fajita, Malai Boti, Pepperoni) on a massive single XL crust.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (83).jpg"
+      image: "assets/images (83).jpg"
     },
     {
       id: "pizza_donner",
@@ -184,7 +184,7 @@ window.HABIBI_MENU = {
       description: "Slices of grilled doner meat, white yogurt sauce, pickles, and crisp sliced onions.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (84).jpg"
+      image: "assets/images (84).jpg"
     },
     {
       id: "pizza_lasagna",
@@ -193,7 +193,7 @@ window.HABIBI_MENU = {
       description: "Layered flat pasta sheets, Bolognese beef sauce, double béchamel, and rich baked mozzarella crust.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "download.jpg"
+      image: "assets/download.jpg"
     },
     {
       id: "pizza_cheese_steak",
@@ -202,7 +202,7 @@ window.HABIBI_MENU = {
       description: "Juicy beef steak strips, caramelized onions, melted cheddar cheese sauce, and bell peppers.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (49).jpg"
+      image: "assets/images (49).jpg"
     },
     {
       id: "pizza_crown_crust",
@@ -211,7 +211,7 @@ window.HABIBI_MENU = {
       description: "Beautifully crimped crust crown-nodes stuffed with cream cheese and topped with grill chicken boti.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (86).jpg"
+      image: "assets/images (86).jpg"
     },
     {
       id: "pizza_behri_kabab",
@@ -220,7 +220,7 @@ window.HABIBI_MENU = {
       description: "Spicy Behari chicken kebab stuffed around the rim of the pizza crust, tikka toppings in the center.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (87).jpg"
+      image: "assets/images (87).jpg"
     },
     {
       id: "pizza_cheese_stuff",
@@ -229,7 +229,7 @@ window.HABIBI_MENU = {
       description: "Stuffed crust loaded with hot melting stringy mozzarella cheese and cheddar cheese blend.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (88).jpg"
+      image: "assets/images (88).jpg"
     },
     {
       id: "pizza_kabab_stuff",
@@ -238,7 +238,7 @@ window.HABIBI_MENU = {
       description: "Premium chicken seekh kebabs rolled inside the crust borders, loaded with pizza seasonings.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (89).jpg"
+      image: "assets/images (89).jpg"
     },
     {
       id: "pizza_habibi_grill",
@@ -247,7 +247,7 @@ window.HABIBI_MENU = {
       description: "Charcoal grilled chicken thighs, smoked onions, barbecue sauce drizzle, and fresh green bell peppers.",
       type: "pizza_special",
       prices: { medium: 1500, large: 2000, xl: 2500 },
-      image: "images (90).jpg"
+      image: "assets/images (90).jpg"
     },
 
     // --- BURGERS ---
@@ -281,7 +281,7 @@ window.HABIBI_MENU = {
       name: "Zinger Burger",
       description: "Crispy double-crunch deep fried chicken breast fillet, iceberg lettuce, and high-quality mayo spread.",
       prices: { default: 390 },
-      image: "images (62).jpg"
+      image: "assets/images (62).jpg"
     },
     {
       id: "burger_petty",
@@ -289,7 +289,7 @@ window.HABIBI_MENU = {
       name: "Petty Burger",
       description: "Traditional breaded fried chicken patty with fresh lettuce and tangy garlic mayo in a soft bun.",
       prices: { default: 300 },
-      image: "images (63).jpg"
+      image: "assets/images (63).jpg"
     },
     {
       id: "burger_chapli",
@@ -297,7 +297,7 @@ window.HABIBI_MENU = {
       name: "Chapli Burger",
       description: "Spicy pan-fried local style minced beef chapli kabab patty, mint sauce, onion slices, and tomatoes.",
       prices: { default: 300 },
-      image: "images (64).jpg"
+      image: "assets/images (64).jpg"
     },
     {
       id: "burger_tandoori",
@@ -305,7 +305,7 @@ window.HABIBI_MENU = {
       name: "Tandoori Burger",
       description: "Tandoori coal-grilled chicken breast, spicy tandoori spread, green chutney, and onions.",
       prices: { default: 670 },
-      image: "images (65).jpg"
+      image: "assets/images (65).jpg"
     },
     {
       id: "burger_pizza",
@@ -313,7 +313,7 @@ window.HABIBI_MENU = {
       name: "Pizza Burger",
       description: "Zinger fillet sandwiched in buns topped with marinara sauce, pizza toppings, and melted baked mozzarella.",
       prices: { default: 500 },
-      image: "images (66).jpg"
+      image: "assets/images (66).jpg"
     },
     {
       id: "burger_tower",
@@ -321,7 +321,7 @@ window.HABIBI_MENU = {
       name: "Tower Burger",
       description: "Crispy zinger fillet stacked with hash brown patty, cheese slice, lettuce, and tangy burger sauce.",
       prices: { default: 650 },
-      image: "images (67).jpg"
+      image: "assets/images (67).jpg"
     },
     {
       id: "burger_grill",
@@ -329,7 +329,7 @@ window.HABIBI_MENU = {
       name: "Grill Burger",
       description: "Succulent charcoal grilled chicken thigh with smoky sauce and fresh salad toppers.",
       prices: { single: 450, double: 750 },
-      image: "images (68).jpg"
+      image: "assets/images (68).jpg"
     },
 
     // --- WRAPS & ROLLS ---
@@ -339,7 +339,7 @@ window.HABIBI_MENU = {
       name: "Habibi Special Wrap",
       description: "Soft tortilla wrapped with grilled chicken chunks, french fries, cheese sauce, olives, and signature sauce.",
       prices: { default: 550 },
-      image: "images (53).jpg"
+      image: "assets/images (53).jpg"
     },
     {
       id: "wrap_grill",
@@ -347,7 +347,7 @@ window.HABIBI_MENU = {
       name: "Grill Wrap",
       description: "Smoky grilled chicken strips, shredded lettuce, bell peppers, and creamy chipotle sauce in flatbread.",
       prices: { default: 650 },
-      image: "images (54).jpg"
+      image: "assets/images (54).jpg"
     },
     {
       id: "shawarma_chicken",
@@ -355,7 +355,7 @@ window.HABIBI_MENU = {
       name: "Chicken Shawarma",
       description: "Local pita bread filled with shredded rotisserie chicken, garlic paste, vinegar pickled cucumber, and cabbage.",
       prices: { default: 250 },
-      image: "images (55).jpg"
+      image: "assets/images (55).jpg"
     },
     {
       id: "shawarma_zinger",
@@ -363,7 +363,7 @@ window.HABIBI_MENU = {
       name: "Zinger Shawarma",
       description: "Crunchy sliced zinger chicken strips, mayo, and green chili sauce rolled in flat pita bread.",
       prices: { default: 390 },
-      image: "images (56).jpg"
+      image: "assets/images (56).jpg"
     },
     {
       id: "paratha_chicken",
@@ -371,7 +371,7 @@ window.HABIBI_MENU = {
       name: "Chicken Paratha Roll",
       description: "Golden flaky paratha roll filled with tikka chicken boti, sliced rings of onion, and tangy mint chutney.",
       prices: { default: 350 },
-      image: "images (57).jpg"
+      image: "assets/images (57).jpg"
     },
     {
       id: "paratha_zinger",
@@ -379,7 +379,7 @@ window.HABIBI_MENU = {
       name: "Zinger Paratha Roll",
       description: "Flaky crisp paratha rolled around deep-fried chicken strips, spicy garlic paste, and onions.",
       prices: { default: 430 },
-      image: "images (58).jpg"
+      image: "assets/images (58).jpg"
     },
     {
       id: "wrap_malai_boti",
@@ -387,7 +387,7 @@ window.HABIBI_MENU = {
       name: "Malai Boti Wrap",
       description: "Tortilla wrapped with creamy melt-in-the-mouth chicken malai boti chunks and white garlic sauce.",
       prices: { default: 590 },
-      image: "images (59).jpg"
+      image: "assets/images (59).jpg"
     },
     {
       id: "shawarma_platter",
@@ -395,7 +395,7 @@ window.HABIBI_MENU = {
       name: "Shawarma Platter",
       description: "Deconstructed chicken shawarma served with extra pita bread sides, hummus, pickled veggies, and garlic dip.",
       prices: { default: 600 },
-      image: "images (60).jpg"
+      image: "assets/images (60).jpg"
     },
     {
       id: "extra_bread",
@@ -403,7 +403,7 @@ window.HABIBI_MENU = {
       name: "Extra Bread (Pita)",
       description: "Warm, freshly baked pita flatbread companion.",
       prices: { default: 50 },
-      image: "images (61).jpg"
+      image: "assets/images (61).jpg"
     },
 
     // --- DESI & BROAST ---
@@ -413,7 +413,7 @@ window.HABIBI_MENU = {
       name: "Beef White Karahi",
       description: "Lean beef chunks slow-cooked in butter, yogurt, cream, fresh ginger, and green chilies.",
       prices: { half_kg: 1200, "1_kg": 2200 },
-      image: "images (38).jpg"
+      image: "assets/images (38).jpg"
     },
     {
       id: "desi_beef_red_karahi",
@@ -421,7 +421,7 @@ window.HABIBI_MENU = {
       name: "Beef Red Karahi",
       description: "Traditional spicy tomato-based beef karahi garnished with coriander, ginger, and lime.",
       prices: { half_kg: 1200, "1_kg": 2200 },
-      image: "images (39).jpg"
+      image: "assets/images (39).jpg"
     },
     {
       id: "desi_mutton_karahi",
@@ -429,7 +429,7 @@ window.HABIBI_MENU = {
       name: "Mutton Karahi",
       description: "Fresh premium mutton cooked in direct wok with fresh tomatoes, ginger, and freshly cracked black pepper.",
       prices: { half_kg: 2200, "1_kg": 4200 },
-      image: "images (40).jpg"
+      image: "assets/images (40).jpg"
     },
     {
       id: "desi_mutton_peshawari",
@@ -437,7 +437,7 @@ window.HABIBI_MENU = {
       name: "Mutton Peshawari Karahi",
       description: "Traditional saltish Peshawari style mutton karahi, cooked with minimal spices and animal fat base.",
       prices: { half_kg: 2300, "1_kg": 4300 },
-      image: "images (41).jpg"
+      image: "assets/images (41).jpg"
     },
     {
       id: "desi_mutton_irani",
@@ -445,7 +445,7 @@ window.HABIBI_MENU = {
       name: "Mutton Irani Karahi",
       description: "Rich mild mutton gravy prepared with cashew paste, cream, saffron hints, and white butter.",
       prices: { half_kg: 2350, "1_kg": 4400 },
-      image: "images (42).jpg"
+      image: "assets/images (42).jpg"
     },
     {
       id: "desi_mutton_sulemani",
@@ -453,7 +453,7 @@ window.HABIBI_MENU = {
       name: "Mutton Sulemani Karahi",
       description: "Herby mutton karahi cooked with green chilies, black pepper, and lemon slices. Light on spices.",
       prices: { half_kg: 2250, "1_kg": 4250 },
-      image: "images (43).jpg"
+      image: "assets/images (43).jpg"
     },
     {
       id: "desi_chicken_white_handi",
@@ -461,7 +461,7 @@ window.HABIBI_MENU = {
       name: "Chicken White Handi",
       description: "Boneless chicken cubes simmered in a clay handi with rich almond cream sauce and white pepper.",
       prices: { half_kg: 1400, "1_kg": 2200 },
-      image: "images (45).jpg"
+      image: "assets/images (45).jpg"
     },
     {
       id: "desi_chicken_achari_handi",
@@ -469,7 +469,7 @@ window.HABIBI_MENU = {
       name: "Chicken Achari Handi",
       description: "Spicy boneless chicken simmered with local pickled spices, mustard seeds, and ginger strips.",
       prices: { half_kg: 1400, "1_kg": 2200 },
-      image: "images (46).jpg"
+      image: "assets/images (46).jpg"
     },
     {
       id: "desi_chicken_malai_handi",
@@ -477,7 +477,7 @@ window.HABIBI_MENU = {
       name: "Chicken Malai Handi",
       description: "Ultra-smooth cream gravy cooked in clay handi with cardamom infused chicken cubes.",
       prices: { half_kg: 1400, "1_kg": 2200 },
-      image: "images (45).jpg"
+      image: "assets/images (45).jpg"
     },
     {
       id: "desi_chicken_jaipoori",
@@ -485,7 +485,7 @@ window.HABIBI_MENU = {
       name: "Chicken Jaipoori Handi",
       description: "Rajasthani style rich spicy gravy cooked with fried onions, crushed nuts, and special spice blend.",
       prices: { half_kg: 1550 },
-      image: "images (47).jpg"
+      image: "assets/images (47).jpg"
     },
     {
       id: "desi_chicken_red_handi",
@@ -493,7 +493,7 @@ window.HABIBI_MENU = {
       name: "Chicken Red Handi",
       description: "Boneless chicken breast strips cooked in clay handi with tomatoes, garlic paste, and local spices.",
       prices: { half_kg: 1400, "1_kg": 2200 },
-      image: "images (48).jpg"
+      image: "assets/images (48).jpg"
     },
     {
       id: "desi_chicken_white_karahi",
@@ -501,7 +501,7 @@ window.HABIBI_MENU = {
       name: "Chicken White Karahi",
       description: "Wok-fried chicken bone-in portions simmered in thick yogurt, white pepper, and green chilies.",
       prices: { half_kg: 1400, "1_kg": 2200 },
-      image: "images (45).jpg"
+      image: "assets/images (45).jpg"
     },
     {
       id: "desi_chicken_peshawari",
@@ -509,7 +509,7 @@ window.HABIBI_MENU = {
       name: "Chicken Peshawari Karahi",
       description: "Traditional salt-cured chicken cooked with sliced tomatoes, green peppers, and black seed highlights.",
       prices: { half_kg: 1600, "1_kg": 2350 },
-      image: "images (51).jpg"
+      image: "assets/images (51).jpg"
     },
     {
       id: "desi_chicken_red_karahi",
@@ -517,7 +517,7 @@ window.HABIBI_MENU = {
       name: "Chicken Red Karahi",
       description: "Spicy tomato gravy karahi prepared with bone-in chicken, green coriander, and fresh julienned ginger.",
       prices: { half_kg: 1550, "1_kg": 2200 },
-      image: "images (48).jpg"
+      image: "assets/images (48).jpg"
     },
     {
       id: "broast_quarter",
@@ -525,7 +525,7 @@ window.HABIBI_MENU = {
       name: "Quarter Broast (Spicy)",
       description: "1 Leg, 1 Thigh piece crispy fried, served with hot golden French fries, 1 bun, garlic dip, and 1 regular drink.",
       prices: { default: 650 },
-      image: "images (52).jpg"
+      image: "assets/images (52).jpg"
     },
     {
       id: "broast_half",
@@ -533,7 +533,7 @@ window.HABIBI_MENU = {
       name: "Half Broast (Spicy)",
       description: "2 Leg, 2 Thigh crispy golden broast pieces, fries, 1 soft bun, garlic dip, fries dip, and 1 regular drink.",
       prices: { default: 1090 },
-      image: "images (52).jpg"
+      image: "assets/images (52).jpg"
     },
     {
       id: "broast_full",
@@ -541,7 +541,7 @@ window.HABIBI_MENU = {
       name: "Full Broast (Spicy)",
       description: "4 Leg, 4 Thigh giant broast platter, double fries portions, 2 soft buns, 2 garlic dips, 2 fries dips, and 1.5 Ltr cold drink.",
       prices: { default: 2150 },
-      image: "images (52).jpg"
+      image: "assets/images (52).jpg"
     },
 
     // --- STARTERS & SIDES ---
@@ -551,7 +551,7 @@ window.HABIBI_MENU = {
       name: "Chicken Nuggets",
       description: "Tender white chicken bites breaded and fried golden crisp, served with ketchup dip.",
       prices: { "6_pcs": 350, "12_pcs": 550 },
-      image: "images (24).jpg"
+      image: "assets/images (24).jpg"
     },
     {
       id: "side_wings",
@@ -559,7 +559,7 @@ window.HABIBI_MENU = {
       name: "Oven Baked Wings",
       description: "Juicy chicken wings coated in spicy hot buffalo sauce and baked slowly in the brick oven.",
       prices: { "6_pcs": 500, "12_pcs": 1000 },
-      image: "images (25).jpg"
+      image: "assets/images (25).jpg"
     },
     {
       id: "side_strips",
@@ -567,7 +567,7 @@ window.HABIBI_MENU = {
       name: "Chicken Strips",
       description: "Breaded boneless chicken breast fingers fried crispy, served with garlic mayo sauce.",
       prices: { "5_pcs": 500, "10_pcs": 900 },
-      image: "images (26).jpg"
+      image: "assets/images (26).jpg"
     },
     {
       id: "side_loaded_fries",
@@ -583,7 +583,7 @@ window.HABIBI_MENU = {
       name: "French Fries",
       description: "Crisp salted potato fries, soft inside and crunchy on the borders.",
       prices: { medium: 350, large: 550 },
-      image: "images (27).jpg"
+      image: "assets/images (27).jpg"
     },
     {
       id: "sandwich_habibi_special",
@@ -591,7 +591,7 @@ window.HABIBI_MENU = {
       name: "Habibi Special Sandwich",
       description: "Multi-layered club sandwich filled with grilled chicken, cheese slice, omelette, sliced tomatoes, cucumbers, and special spread.",
       prices: { default: 650 },
-      image: "images (28).jpg"
+      image: "assets/images (28).jpg"
     },
     {
       id: "sandwich_grill",
@@ -599,7 +599,7 @@ window.HABIBI_MENU = {
       name: "Grill Sandwich",
       description: "Panini grilled bread filled with shredded bbq chicken thighs, melting cheddar cheese, and capsicums.",
       prices: { default: 650 },
-      image: "images (29).jpg"
+      image: "assets/images (29).jpg"
     },
     {
       id: "sandwich_club",
@@ -607,7 +607,7 @@ window.HABIBI_MENU = {
       name: "Club Sandwich",
       description: "Traditional toasted bread sandwich with chicken salad spread, hard-boiled egg slices, and lettuce layers.",
       prices: { default: 550 },
-      image: "images (30).jpg"
+      image: "assets/images (30).jpg"
     },
     {
       id: "sandwich_cold_chicken",
@@ -615,7 +615,7 @@ window.HABIBI_MENU = {
       name: "Cold Chicken Sandwich",
       description: "Soft chilled bread slices stuffed with finely shredded chicken salad and black pepper mayo.",
       prices: { default: 500 },
-      image: "images(31).jpg"
+      image: "assets/images (31).jpg"
     },
     {
       id: "sandwich_cold_veg",
@@ -623,7 +623,7 @@ window.HABIBI_MENU = {
       name: "Veg Cold Sandwich",
       description: "Toasted sandwich with layers of fresh cucumbers, tomatoes, carrots, cabbage, and light diet dressing.",
       prices: { default: 480 },
-      image: "images (32).jpg"
+      image: "assets/images (32).jpg"
     },
     {
       id: "sandwich_zinger",
@@ -631,7 +631,7 @@ window.HABIBI_MENU = {
       name: "Zinger Sandwich",
       description: "Submarine roll filled with crispy zinger chicken chunks, lettuce, and premium garlic mayonnaise.",
       prices: { default: 550 },
-      image: "images (33).jpg"
+      image: "assets/images (33).jpg"
     },
     {
       id: "salad_fattoush",
@@ -639,7 +639,7 @@ window.HABIBI_MENU = {
       name: "Fattoush Salad",
       description: "Traditional Levantine salad made of toasted pita croutons, mixed greens, radishes, tomatoes, cucumbers, and olive oil.",
       prices: { default: 580 },
-      image: "images (34).jpg"
+      image: "assets/images (34).jpg"
     },
     {
       id: "salad_fattoush_chicken",
@@ -647,7 +647,7 @@ window.HABIBI_MENU = {
       name: "Fattoush with Grilled Chicken",
       description: "Our signature Fattoush salad topped with tender sliced charcoal-grilled chicken breast pieces.",
       prices: { default: 780 },
-      image: "images (35).jpg"
+      image: "assets/images (35).jpg"
     },
     {
       id: "salad_russian",
@@ -655,7 +655,7 @@ window.HABIBI_MENU = {
       name: "Special Russian Salad",
       description: "Chilled combination of diced apples, pineapples, sweet peas, potatoes, carrots in sweet cream salad sauce.",
       prices: { default: 270 },
-      image: "images (36).jpg"
+      image: "assets/images (36).jpg"
     },
     {
       id: "salad_chana_chaat",
@@ -663,7 +663,7 @@ window.HABIBI_MENU = {
       name: "Chana Chaat",
       description: "Spicy chickpea salad mixed with raw onions, chopped tomatoes, green chilies, yogurt, and sweet-sour tamarind syrup.",
       prices: { default: 270 },
-      image: "images (37).jpg"
+      image: "assets/images (37).jpg"
     },
 
     // --- PASTAS ---
@@ -673,7 +673,7 @@ window.HABIBI_MENU = {
       name: "Alfredo Pasta",
       description: "Fettuccine pasta tossed in butter-parmesan cream sauce, topped with grilled chicken breast slices and mushrooms.",
       prices: { medium: 650, large: 900 },
-      image: "images(19).jpg"
+      image: "assets/images(19).jpg"
     },
     {
       id: "pasta_creamy_special",
@@ -681,7 +681,7 @@ window.HABIBI_MENU = {
       name: "Creamy Habibi Special Pasta",
       description: "Penne pasta cooked in white spicy herb cream sauce, loaded with bell peppers, olives, chicken chunks, and baked cheese cover.",
       prices: { medium: 600, large: 850 },
-      image: "images(20).jpg"
+      image: "assets/images(20).jpg"
     },
     {
       id: "pasta_penny_sauce",
@@ -689,7 +689,7 @@ window.HABIBI_MENU = {
       name: "Penny Sauce Pasta",
       description: "Penne pasta cooked in spicy red marinara and white cream mix (pink sauce), roasted garlic, chicken, and broccoli.",
       prices: { medium: 450, large: 690 },
-      image: "images(21).jpg"
+      image: "assets/images(21).jpg"
     },
     {
       id: "pasta_macaroni",
@@ -697,7 +697,7 @@ window.HABIBI_MENU = {
       name: "Chicken Macaronies Pasta",
       description: "Elbow macaroni stir-fried in local desified wok style with chicken chunks, capsicums, cabbage, carrots, soy sauce, and chilies.",
       prices: { medium: 400, large: 650 },
-      image: "images(22).jpg"
+      image: "assets/images(22).jpg"
     },
 
     // --- CHIL SIDE & DESSERTS ---
@@ -715,7 +715,7 @@ window.HABIBI_MENU = {
       name: "Strawberry Ice Shake",
       description: "Vibrant pink milkshake blended with sweet strawberries, strawberry ice cream scoop, and fresh cream.",
       prices: { default: 480 },
-      image: "assets/images(1).jpg"
+      image: "assets/images (1).jpg"
     },
     {
       id: "shake_kulfi",
@@ -849,20 +849,20 @@ window.HABIBI_MENU = {
 };
 
 window.HABIBI_DEALS = [
-  { id: 1, name: "Habibi Deal 1", contents: "2 Small Pizzas + 1 Ltr Cold Drink", price: 1150, category: "Deals", tag: "Hot Seller", image: "assets/pizza_tikka.png" },
-  { id: 2, name: "Habibi Deal 2", contents: "1 Medium Pizza + 6 Hot Wings + 1 Ltr Cold Drink", price: 1700, category: "Deals", tag: "Popular", image: "assets/pizza_tikka.png" },
-  { id: 3, name: "Habibi Deal 3", contents: "1 Medium Pizza + 12 Hot Wings + 1.5 Ltr Cold Drink", price: 2200, category: "Deals", tag: "Super Value", image: "assets/pizza_tikka.png" },
-  { id: 4, name: "Habibi Deal 4", contents: "1 Medium Pizza + 1 Cheese Stick + 1.5 Ltr Cold Drink", price: 2400, category: "Deals", tag: "New", image: "assets/pizza_tikka.png" },
-  { id: 5, name: "Habibi Deal 5", contents: "1 Large Pizza + 6 Hot Wings + 1.5 Ltr Cold Drink", price: 2580, category: "Deals", tag: "Mega Feast", image: "assets/pizza_tikka.png" },
-  { id: 6, name: "Habibi Deal 6", contents: "1 Large Pizza + 4 Regular Zinger Burgers + 1.5 Ltr Cold Drink", price: 3250, category: "Deals", tag: "Jumbo Deal", image: "assets/hero_food_collage.png" },
-  { id: 7, name: "Habibi Deal 7", contents: "1 Large Pizza + 2 Zinger Burgers + 1 Regular Fries + 1.5 Ltr Cold Drink", price: 2850, category: "Deals", tag: "Party Special", image: "assets/hero_food_collage.png" },
-  { id: 8, name: "Habibi Deal 8", contents: "2 Medium Pizzas + 1 Regular Zinger Burger + 1 Regular Fries + 1.5 Ltr Cold Drink", price: 3100, category: "Deals", tag: "Crowd Pleaser", image: "assets/hero_food_collage.png" },
-  { id: 9, name: "Habibi Deal 9", contents: "2 Extra Large (XL) Pizzas + 1 Regular Fries + 1.5 Ltr Cold Drink", price: 4850, category: "Deals", tag: "Giant Deal", image: "assets/pizza_tikka.png" },
-  { id: 10, name: "Habibi Deal 10", contents: "1 Regular Zinger Burger + 1 Regular Fries + 1 Regular Drink", price: 650, category: "Deals", tag: "Individual Saver", image: "assets/burger_bomba.png" },
-  { id: 11, name: "Habibi Deal 11", contents: "2 Cheese Patty Burgers + 2 Regular Drinks", price: 750, category: "Deals", tag: "Duet Offer", image: "assets/burger_bomba.png" },
-  { id: 12, name: "Habibi Deal 12", contents: "2 Regular Zinger Burgers + 1 Regular Fries + 2 Regular Drinks", price: 1050, category: "Deals", tag: "Zinger Bundle", image: "assets/burger_bomba.png" },
-  { id: 13, name: "Habibi Deal 13", contents: "3 Chicken Shawarmas + 1 Ltr Cold Drink", price: 800, category: "Deals", tag: "Shawarma Combo", image: "assets/burger_bomba.png" },
-  { id: 14, name: "Habibi Deal 14", contents: "4 Regular Zinger Burgers + 1.5 Ltr Cold Drink", price: 1950, category: "Deals", tag: "Zinger Craze", image: "assets/burger_bomba.png" },
+  { id: 1, name: "Habibi Deal 1", contents: "2 Small Pizzas + 1 Ltr Cold Drink", price: 1150, category: "Deals", tag: "Hot Seller", image: "assets/images (91).jpg.png" },
+  { id: 2, name: "Habibi Deal 2", contents: "1 Medium Pizza + 6 Hot Wings + 1 Ltr Cold Drink", price: 1700, category: "Deals", tag: "Popular", image: "assets/images (92)" },
+  { id: 3, name: "Habibi Deal 3", contents: "1 Medium Pizza + 12 Hot Wings + 1.5 Ltr Cold Drink", price: 2200, category: "Deals", tag: "Super Value", image: "assets/ images (93)" },
+  { id: 4, name: "Habibi Deal 4", contents: "1 Medium Pizza + 1 Cheese Stick + 1.5 Ltr Cold Drink", price: 2400, category: "Deals", tag: "New", image: "assets/images (94)" },
+  { id: 5, name: "Habibi Deal 5", contents: "1 Large Pizza + 6 Hot Wings + 1.5 Ltr Cold Drink", price: 2580, category: "Deals", tag: "Mega Feast", image: "assets/images (95)" },
+  { id: 6, name: "Habibi Deal 6", contents: "1 Large Pizza + 4 Regular Zinger Burgers + 1.5 Ltr Cold Drink", price: 3250, category: "Deals", tag: "Jumbo Deal", image: "assets/images (96)" },
+  { id: 7, name: "Habibi Deal 7", contents: "1 Large Pizza + 2 Zinger Burgers + 1 Regular Fries + 1.5 Ltr Cold Drink", price: 2850, category: "Deals", tag: "Party Special", image: "assets/images (97)" },
+  { id: 8, name: "Habibi Deal 8", contents: "2 Medium Pizzas + 1 Regular Zinger Burger + 1 Regular Fries + 1.5 Ltr Cold Drink", price: 3100, category: "Deals", tag: "Crowd Pleaser", image: "assets/images (98)" },
+  { id: 9, name: "Habibi Deal 9", contents: "2 Extra Large (XL) Pizzas + 1 Regular Fries + 1.5 Ltr Cold Drink", price: 4850, category: "Deals", tag: "Giant Deal", image: "assets/images (99)" },
+  { id: 10, name: "Habibi Deal 10", contents: "1 Regular Zinger Burger + 1 Regular Fries + 1 Regular Drink", price: 650, category: "Deals", tag: "Individual Saver", image: "assets/images (100)" },
+  { id: 11, name: "Habibi Deal 11", contents: "2 Cheese Patty Burgers + 2 Regular Drinks", price: 750, category: "Deals", tag: "Duet Offer", image: "assets/images (100)" },
+  { id: 12, name: "Habibi Deal 12", contents: "2 Regular Zinger Burgers + 1 Regular Fries + 2 Regular Drinks", price: 1050, category: "Deals", tag: "Zinger Bundle", image: "assets/images (100)" },
+  { id: 13, name: "Habibi Deal 13", contents: "3 Chicken Shawarmas + 1 Ltr Cold Drink", price: 800, category: "Deals", tag: "Shawarma Combo", image: "assets/images (100)" },
+  { id: 14, name: "Habibi Deal 14", contents: "4 Regular Zinger Burgers + 1.5 Ltr Cold Drink", price: 1950, category: "Deals", tag: "Zinger Craze", image: "assets/images (100)" },
   { id: 15, name: "Habibi Deal 15", contents: "6 Regular Burgers + 12 Pieces Chicken Nuggets + 1.5 Ltr Cold Drink", price: 2250, category: "Deals", tag: "Family Pack", image: "assets/hero_food_collage.png" },
   { id: 16, name: "Habibi Deal 16", contents: "2 Large Pizzas + 1.5 Ltr Cold Drink", price: 3150, category: "Deals", tag: "Double Fun", image: "assets/pizza_tikka.png" },
   { id: 17, name: "Habibi Deal 17", contents: "1 Beef Burger + 1 Regular Fries + 1 Regular Drink", price: 880, category: "Deals", tag: "Beef Saver", image: "assets/burger_bomba.png" },
