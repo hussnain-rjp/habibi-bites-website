@@ -715,7 +715,7 @@ window.HABIBI_MENU = {
       name: "Strawberry Ice Shake",
       description: "Vibrant pink milkshake blended with sweet strawberries, strawberry ice cream scoop, and fresh cream.",
       prices: { default: 480 },
-      image: "images(1).jpg"
+      image: "assets/images(1).jpg"
     },
     {
       id: "shake_kulfi",
@@ -723,7 +723,7 @@ window.HABIBI_MENU = {
       name: "Kulfi Ice Shake",
       description: "Traditional local shake containing crushed khoya kulfi pieces, almond nuts, cardamom, and thick milk.",
       prices: { default: 480 },
-      image: "images (2).jpg"
+      image: "assets/images (2).jpg"
     },
     {
       id: "shake_oreo",
@@ -731,7 +731,7 @@ window.HABIBI_MENU = {
       name: "Oreo Ice Shake",
       description: "Indulgent shake containing crushed chocolate Oreo cookies, vanilla-chocolate ice cream, and chocolate fudge syrup.",
       prices: { default: 520 },
-      image: "images (3).jpg"
+      image: "assets/images (3).jpg"
     },
     {
       id: "drink_margarita",
@@ -739,7 +739,7 @@ window.HABIBI_MENU = {
       name: "Mint Margarita",
       description: "Refreshing soda blend with freshly squeezed lemon juice, crushed mint leaves, salt, sugar, and ice.",
       prices: { default: 220 },
-      image: "images (4).jpg"
+      image: "assets/images (4).jpg"
     },
     {
       id: "drink_sprite_lime",
@@ -747,7 +747,7 @@ window.HABIBI_MENU = {
       name: "Sprite Lime",
       description: "Carbonated lemon-lime soda enhanced with freshly squeezed lime juice and a dash of black salt.",
       prices: { default: 200 },
-      image: "images (5).jpg"
+      image: "assets/images (5).jpg"
     },
     {
       id: "icecream_chocolate_vanilla",
@@ -755,7 +755,7 @@ window.HABIBI_MENU = {
       name: "Chocolate Vanilla Ice Cream",
       description: "Three rich scoops of marbled premium chocolate and smooth vanilla ice cream.",
       prices: { default: 380 },
-      image: "images (7).jpg"
+      image: "assets/images (7).jpg"
     },
     {
       id: "icecream_mango_vanilla",
@@ -763,7 +763,7 @@ window.HABIBI_MENU = {
       name: "Mango Vanilla Ice Cream",
       description: "Three delicious scoops of mango and vanilla flavored ice cream blend.",
       prices: { default: 380 },
-      image: "images (8).jpg"
+      image: "assets/images (8).jpg"
     },
     {
       id: "icecream_strawberry_vanilla",
@@ -771,7 +771,7 @@ window.HABIBI_MENU = {
       name: "Strawberry Vanilla Ice Cream",
       description: "Three creamy scoops featuring strawberry and vanilla flavors, topped with sweet syrup.",
       prices: { default: 380 },
-      image: "images (9).jpg"
+      image: "assets/images (9).jpg"
     },
     {
       id: "icecream_kulfi",
@@ -779,7 +779,7 @@ window.HABIBI_MENU = {
       name: "Kulfi Ice Cream (3 Scoop)",
       description: "Traditional desi kulfi flavored ice cream scoops topped with pistachio shavings.",
       prices: { default: 380 },
-      image: "images (10).jpg"
+      image: "assets/images (10).jpg"
     },
     {
       id: "icecream_mango",
@@ -787,7 +787,7 @@ window.HABIBI_MENU = {
       name: "Mango Ice Cream (3 Scoop)",
       description: "Three scoops of luscious sweet mango seasonal fruit flavor ice cream.",
       prices: { default: 380 },
-      image: "images (11).jpg"
+      image: "assets/images (11).jpg"
     },
     {
       id: "icecream_tutti_frutti",
@@ -795,7 +795,7 @@ window.HABIBI_MENU = {
       name: "Tutti Frutti Ice Cream (3 Scoop)",
       description: "Creamy colorful scoops containing candy candied-fruit bits (ashrafi) and dry nut crunch.",
       prices: { default: 380 },
-      image: "images (12).jpg"
+      image: "assets/images (12).jpg"
     },
     {
       id: "icecream_strawberry",
@@ -803,7 +803,7 @@ window.HABIBI_MENU = {
       name: "Strawberry Ice Cream (3 Scoop)",
       description: "Three scoops of creamy pink strawberry flavored ice cream.",
       prices: { default: 380 },
-      image: "images (13).jpg"
+      image: "assets/images (13).jpg"
     },
     {
       id: "icecream_oreo",
@@ -811,7 +811,7 @@ window.HABIBI_MENU = {
       name: "Oreo Ice Cream (3 Scoop)",
       description: "Cookies and cream flavored scoops mixed with chunky pieces of sweet Oreo biscuits.",
       prices: { default: 380 },
-      image: "images (14).jpg"
+      image: "assets/images (14).jpg"
     },
     {
       id: "icecream_coconut",
@@ -819,7 +819,7 @@ window.HABIBI_MENU = {
       name: "Coconut Ice Cream (3 Scoop)",
       description: "Subtle coconut cream flavored scoops sprinkled with desiccated raw coconut shreds.",
       prices: { default: 380 },
-      image: "images (15).jpg"
+      image: "assets/images (15).jpg"
     },
     {
       id: "icecream_pistachio",
@@ -827,7 +827,7 @@ window.HABIBI_MENU = {
       name: "Pistachio Ice Cream (3 Scoop)",
       description: "Light green aromatic pistachio nut flavored ice cream scoops.",
       prices: { default: 380 },
-      image: "images (16).jpg"
+      image: "assets/images (16).jpg"
     },
     {
       id: "hot_tea",
@@ -835,7 +835,7 @@ window.HABIBI_MENU = {
       name: "Habibi Special Tea (Karak)",
       description: "Brewed with high-quality cardamom tea leaves, fresh thick milk, and sugar simmered slowly.",
       prices: { default: 130 },
-      image: "images (17).jpg"
+      image: "assets/images (17).jpg"
     },
     {
       id: "hot_coffee",
@@ -843,7 +843,7 @@ window.HABIBI_MENU = {
       name: "Hot Coffee",
       description: "Strong aromatic espresso shot combined with steamed milk froth.",
       prices: { default: 380 },
-      image: "images (18).jpg"
+      image: "assets/images (18).jpg"
     }
   ]
 };
