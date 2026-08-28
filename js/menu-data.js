@@ -707,7 +707,7 @@ window.HABIBI_MENU = {
       name: "Mango Ice Shake",
       description: "Creamy milkshake blended with sweet mango pulp, vanilla ice cream, and chilled fresh milk.",
       prices: { default: 480 },
-      image: ""
+      image: "assets/images.jpg"
     },
     {
       id: "shake_strawberry",
