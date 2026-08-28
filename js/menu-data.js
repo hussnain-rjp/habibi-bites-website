@@ -715,7 +715,7 @@ window.HABIBI_MENU = {
       name: "Strawberry Ice Shake",
       description: "Vibrant pink milkshake blended with sweet strawberries, strawberry ice cream scoop, and fresh cream.",
       prices: { default: 480 },
-      image: "images (1).jpg"
+      image: "images(1).jpg"
     },
     {
       id: "shake_kulfi",
